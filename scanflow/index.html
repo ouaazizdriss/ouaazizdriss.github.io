@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liasse document scanner</title>
+<meta name="description" content="Liasse is an offline-first Android document scanner: ML Kit edge detection, non-destructive crop and filters, on-device OCR, full-text search and searchable PDF export. Nothing leaves the phone unless you turn on backup to your own Google Drive.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Liasse document scanner">
+<meta property="og:description" content="Paper in, searchable PDF out. Edge detection, crop, filters and OCR run on the phone; the library works offline.">
+<meta property="og:url" content="https://ouaazizdriss.github.io/scanflow/">
+<meta property="og:image" content="https://ouaazizdriss.github.io/scanflow/img/proto-search.webp">
+<meta name="theme-color" content="#0F2A43">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2314B8A6'/%3E%3Cstop offset='.52' stop-color='%230F766E'/%3E%3Cstop offset='1' stop-color='%230F2A43'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='220' fill='url(%23g)'/%3E%3Cpath d='M240,364V240H364M660,240H784V364M784,660V784H660M364,784H240V660' fill='none' stroke='%23fff' stroke-width='48' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M408,316H596L670,390V700Q670,722 648,722H408Q386,722 386,700V338Q386,316 408,316Z' fill='%23fff'/%3E%3Crect x='300' y='532' width='424' height='30' rx='15' fill='%235EEAD4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..600&family=Public+Sans:ital,wght@0,400..700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@500&display=swap">
+<style>
+/* Layout: a liasse, a bundle of numbered sheets. Every section is one scanned sheet
+   framed by the app's own detection brackets and numbered "n / N" like its page viewer.
+   Palette: Liasse's "Slate & Teal". teal on light grounds, tealBright on dark ones. */
+:root {
+  --canvas: #F4F7FA; --surface: #FFFFFF; --ink: #0F1B2A; --mute: #5B6B7E; --line: #DFE5EC;
+  --mist: #DCE7EF; --tint: #EFF5F9; --teal: #0F766E; --teal-soft: #E3F1EF; --navy: #0F2A43;
+  --accent: #0F766E; --bracket: #0F766E; --hit: #F6C560; --hit-ink: #0F1B2A;
+  --cam: #0B1220; --cam-2: #142033; --on-cam: #E6EDF5; --on-cam-mute: #93A4B8; --bright: #14B8A6;
+  --steel: #7FA8C9; --warn: #9A5B00;
+  --shadow: 0 2px 10px rgba(15,27,42,.06);
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: "Public Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --col: 1200px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas: #0B1220; --surface: #111B2B; --ink: #E6EDF5; --mute: #9AAABD; --line: #22324A;
+  --mist: #1C2A3F; --tint: #15243A; --teal: #2DBFAE; --teal-soft: #10302E; --navy: #9CC3E4;
+  --accent: #14B8A6; --bracket: #14B8A6; --hit: #F6C560; --hit-ink: #0F1B2A;
+  --cam: #070C16; --cam-2: #0F1A2B; --steel: #7FA8C9; --warn: #F0B860;
+  --shadow: 0 2px 14px rgba(0,0,0,.35); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --canvas: #0B1220; --surface: #111B2B; --ink: #E6EDF5; --mute: #9AAABD; --line: #22324A;
+  --mist: #1C2A3F; --tint: #15243A; --teal: #2DBFAE; --teal-soft: #10302E; --navy: #9CC3E4;
+  --accent: #14B8A6; --bracket: #14B8A6; --hit: #F6C560; --hit-ink: #0F1B2A;
+  --cam: #070C16; --cam-2: #0F1A2B; --steel: #7FA8C9; --warn: #F0B860;
+  --shadow: 0 2px 14px rgba(0,0,0,.35); color-scheme: dark }
+
+* { box-sizing: border-box }
+html { scroll-behavior: smooth; scroll-padding-top: 72px }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--sans); font-size: 16.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden }
+img, canvas, svg { max-width: 100%; display: block }
+a { color: var(--teal); text-underline-offset: 3px }
+a:hover { color: var(--ink) }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 500 }
+h1 { font-family: var(--serif); font-size: clamp(42px, 6.4vw, 86px); line-height: .98; letter-spacing: -.02em; font-variation-settings: "opsz" 72 }
+h2 { font-family: var(--serif); font-size: clamp(32px, 4.2vw, 54px); line-height: 1.02; letter-spacing: -.015em; font-variation-settings: "opsz" 60 }
+h1 em, h2 em { font-style: italic; color: var(--teal) }
+h3 { font-family: var(--sans); font-size: 17px; font-weight: 700; line-height: 1.3; letter-spacing: -.005em }
+p { margin: 0; max-width: 66ch }
+.lede { font-size: 19px; line-height: 1.55; color: var(--mute) }
+.mute { color: var(--mute) }
+.mono, code { font-family: var(--mono); font-size: .84em }
+code { background: var(--tint); padding: .08em .35em; border-radius: 5px; overflow-wrap: anywhere }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--surface); padding: 8px 12px; z-index: 50 }
+.skip:focus { left: 16px }
+
+/* top bar */
+.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); padding: 0 max(16px, env(safe-area-inset-left)) }
+.top-in { max-width: var(--col); margin: 0 auto; display: flex; align-items: center; gap: 20px; height: 60px }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-family: var(--serif); font-size: 24px; font-weight: 500; letter-spacing: -.01em }
+.brand svg { width: 30px; height: 30px; border-radius: 8px }
+.top nav { display: flex; gap: 18px; margin-left: auto; font-size: 14px }
+.top nav a { color: var(--mute); text-decoration: none }
+.top nav a:hover { color: var(--ink) }
+.theme-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 40px; height: 40px; border-radius: 99px; cursor: pointer; display: grid; place-items: center; flex: none }
+.theme-btn svg { width: 18px; height: 18px }
+@media (max-width: 900px) { .top nav { display: none } .theme-btn { margin-left: auto } }
+
+/* sheets */
+main { padding: 28px max(16px, env(safe-area-inset-left)) 40px }
+.sheet { position: relative; max-width: var(--col); margin: 0 auto 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); padding: clamp(28px, 5vw, 72px) clamp(20px, 5vw, 72px) }
+.sheet::before { content: ""; position: absolute; inset: 12px; pointer-events: none; --b: var(--bracket); --l: 26px; --t: 2px;
+  background:
+    linear-gradient(var(--b),var(--b)) top left / var(--l) var(--t), linear-gradient(var(--b),var(--b)) top left / var(--t) var(--l),
+    linear-gradient(var(--b),var(--b)) top right / var(--l) var(--t), linear-gradient(var(--b),var(--b)) top right / var(--t) var(--l),
+    linear-gradient(var(--b),var(--b)) bottom left / var(--l) var(--t), linear-gradient(var(--b),var(--b)) bottom left / var(--t) var(--l),
+    linear-gradient(var(--b),var(--b)) bottom right / var(--l) var(--t), linear-gradient(var(--b),var(--b)) bottom right / var(--t) var(--l);
+  background-repeat: no-repeat; opacity: .55 }
+.folio { position: absolute; top: 22px; right: 34px; font-family: var(--mono); font-size: 12px; color: var(--mute); letter-spacing: .02em; background: var(--tint); padding: 2px 10px; border-radius: 99px }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; color: var(--teal); letter-spacing: .02em; margin-bottom: 14px; display: block }
+.head { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px 56px; align-items: end; margin-bottom: 40px }
+.head p { color: var(--mute) }
+@media (max-width: 900px) { .head { grid-template-columns: 1fr } }
+.sheet.dark { background: var(--cam); color: var(--on-cam); border-color: #1d2a3f; --bracket: #14B8A6 }
+.sheet.dark .mute, .sheet.dark .head p { color: var(--on-cam-mute) }
+.sheet.dark .eyebrow { color: var(--bright) }
+.sheet.dark h2 em { color: var(--bright) }
+.sheet.dark .folio { background: #16233a; color: var(--on-cam-mute) }
+.sheet.dark code { background: #16233a; color: var(--on-cam) }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 48px; align-items: center }
+.hero-copy { display: flex; flex-direction: column; gap: 26px }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--ink); }
+.facts div { padding: 12px 14px 0 0 }
+.facts b { display: block; font-size: 14px }
+.facts span { font-size: 13px; color: var(--mute); line-height: 1.4; display: block }
+.hero-art { position: relative; background: var(--cam); border-radius: 22px; padding: 14px; box-shadow: 0 20px 50px rgba(15,42,67,.22) }
+.hero-art canvas { width: 100%; height: auto; border-radius: 12px }
+.hero-art svg.quad { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px - 40px) }
+.hero-art .chips { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 12px; height: 40px; overflow: hidden }
+.hero-art .chips span { font-family: var(--mono); font-size: 11.5px; color: var(--on-cam-mute); border: 1px solid #22324A; border-radius: 99px; padding: 3px 10px; white-space: nowrap }
+.hero-art .chips span b { color: var(--bright); font-weight: 500 }
+.scanline { animation: scan 3.2s cubic-bezier(.45,0,.55,1) infinite alternate }
+@keyframes scan { from { transform: translateY(0) } to { transform: translateY(86%) } }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr } .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px } }
+
+.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; margin-top: 56px; border-top: 1px solid var(--line) }
+.stat { padding: 16px 16px 0 0; border-right: 1px solid var(--line); padding-left: 16px }
+.stat:first-child { padding-left: 0 }
+.stat:last-child { border-right: 0 }
+.stat .k { font-family: var(--mono); font-size: 11.5px; color: var(--mute); display: block }
+.stat .v { font-family: var(--serif); font-size: 48px; line-height: 1.05; display: block; font-variation-settings: "opsz" 60 }
+.stat .d { font-size: 13px; color: var(--mute); line-height: 1.4; display: block }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) } .stat { padding-left: 0; border-right: 0; border-bottom: 1px solid var(--line); padding-bottom: 14px } }
+
+/* columns of points */
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 }
+.cols > div { padding: 0 26px; border-left: 1px solid var(--line) }
+.cols > div:first-child { padding-left: 0; border-left: 0 }
+.cols h3 { margin-bottom: 8px }
+.cols p { font-size: 15px; color: var(--mute) }
+.cols .tag { font-family: var(--mono); font-size: 11.5px; color: var(--teal); display: block; margin-bottom: 10px }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; gap: 22px } .cols > div { padding: 0; border: 0 } }
+.sheet.dark .cols > div { border-color: #22324A }
+.sheet.dark .cols p { color: var(--on-cam-mute) }
+.sheet.dark .cols .tag { color: var(--bright) }
+
+/* flow strip */
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 38px; font-family: var(--mono); font-size: 12.5px }
+.flow span { border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; background: var(--tint) }
+.flow i { color: var(--mute); font-style: normal }
+
+/* demo shells */
+.demo { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start }
+.demo-search { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 48px }
+.demo-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+@media (max-width: 960px) { .demo, .demo-search, .demo-even { grid-template-columns: 1fr } }
+.stage { position: relative; background: var(--cam-2); border-radius: 16px; padding: 12px; touch-action: none; user-select: none; -webkit-user-select: none }
+.stage canvas { width: 100%; height: auto; border-radius: 8px }
+.stage svg { position: absolute; left: 12px; top: 12px; overflow: visible }
+.handle { cursor: grab; outline: none }
+.handle:focus-visible circle.ring { stroke: #fff; stroke-width: 3 }
+.loupe { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 6px 20px rgba(0,0,0,.45); overflow: hidden; pointer-events: none; display: none; background: #000 }
+.loupe canvas { width: 120px; height: 120px; border-radius: 50% }
+.panel { background: #0F1A2B; border: 1px solid #22324A; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px }
+.panel .out { background: repeating-conic-gradient(#132036 0 25%, #0F1A2B 0 50%) 0 0 / 16px 16px; border-radius: 10px; display: grid; place-items: center; padding: 12px; min-height: 260px }
+.panel .out canvas { max-height: 380px; width: auto; box-shadow: 0 4px 18px rgba(0,0,0,.4) }
+.btns { display: flex; flex-wrap: wrap; gap: 8px }
+.btn { font: 600 14px/1 var(--sans); color: var(--on-cam); background: #16233a; border: 1px solid #2a3b55; border-radius: 99px; padding: 0 16px; min-height: 44px; cursor: pointer }
+.btn:hover { border-color: var(--bright) }
+.btn.primary { background: var(--bright); color: #062a27; border-color: var(--bright) }
+.kv { font-family: var(--mono); font-size: 12.5px; color: var(--on-cam-mute); display: grid; grid-template-columns: auto 1fr; gap: 4px 14px }
+.kv b { color: var(--on-cam); font-weight: 500; overflow-wrap: anywhere }
+.note { font-size: 13.5px; color: var(--on-cam-mute); border-left: 2px solid var(--bright); padding-left: 12px }
+.sheet:not(.dark) .note { color: var(--mute); border-color: var(--teal) }
+
+/* filters demo */
+.film { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px }
+.film button { background: none; border: 2px solid transparent; border-radius: 10px; padding: 4px; cursor: pointer; color: var(--on-cam-mute); font: 500 12px/1.2 var(--sans); min-height: 44px }
+.film button svg { width: 100%; height: auto; border-radius: 6px; margin-bottom: 6px; position: static }
+.film button[aria-pressed="true"] { border-color: var(--bright); color: var(--on-cam) }
+.sliders { display: grid; gap: 10px }
+.sliders label { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center; gap: 12px; font-size: 13.5px; color: var(--on-cam-mute) }
+.sliders output { font-family: var(--mono); font-size: 12.5px; color: var(--on-cam); text-align: right }
+input[type=range] { width: 100%; accent-color: var(--bright); min-height: 32px }
+.look-view svg { width: 100%; height: auto; border-radius: 8px; position: static }
+.matrix { font-family: var(--mono); font-size: 11.5px; color: var(--on-cam-mute); white-space: pre; overflow-x: auto; background: #0F1A2B; border: 1px solid #22324A; border-radius: 10px; padding: 12px; margin: 0 }
+
+/* search demo */
+.phone { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 20px 16px 16px; box-shadow: 0 16px 40px rgba(15,42,67,.12); max-width: 420px; width: 100% }
+.field { display: flex; align-items: center; gap: 8px; background: var(--tint); border: 1.5px solid var(--teal); border-radius: 12px; padding: 0 12px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 16%, transparent) }
+.field input { flex: 1; min-width: 0; border: 0; background: transparent; font: 400 16px var(--sans); color: var(--ink); height: 46px; outline: none }
+.chiprow { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap }
+.chip { font: 600 12.5px/1 var(--sans); padding: 0 12px; min-height: 34px; border-radius: 99px; border: 0; background: var(--mist); color: var(--ink); cursor: pointer }
+.chip[aria-pressed="true"] { background: var(--navy); color: var(--surface) }
+.grp { font-family: var(--mono); font-size: 11px; color: var(--mute); letter-spacing: .04em; margin: 14px 0 6px; text-transform: uppercase }
+.res { list-style: none; margin: 0; padding: 0 }
+.res li { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px }
+.res li:last-child { border-bottom: 0 }
+.res .t { font-weight: 600; display: flex; justify-content: space-between; gap: 8px }
+.res .t span { font-family: var(--mono); font-weight: 400; color: var(--mute); font-size: 12px; white-space: nowrap }
+.res .s { color: var(--mute); font-size: 13.5px; line-height: 1.45 }
+mark { background: var(--hit); color: var(--hit-ink); border-radius: 3px; padding: 0 2px }
+.empty { color: var(--mute); font-size: 14px; padding: 12px 0 }
+.foot-note { font-size: 12px; color: var(--mute); margin-top: 10px; font-family: var(--mono) }
+.rules { display: flex; flex-direction: column; gap: 18px }
+.rules li { margin-bottom: 4px }
+.rules ul { margin: 0; padding-left: 18px; color: var(--mute); font-size: 15px; display: grid; gap: 8px }
+.fts { font-family: var(--mono); font-size: 12.5px; background: var(--tint); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: pre; color: var(--ink) }
+
+/* export planner */
+.form { display: grid; gap: 16px }
+.form fieldset { border: 0; padding: 0; margin: 0 }
+.form legend, .form .lab { font-family: var(--mono); font-size: 12px; color: var(--mute); margin-bottom: 8px; display: block }
+.seg { display: flex; flex-wrap: wrap; gap: 6px }
+.seg label { position: relative }
+.seg input { position: absolute; opacity: 0; inset: 0 }
+.seg span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 12px; background: var(--tint); border: 1px solid var(--line); font-size: 14px; font-weight: 600; cursor: pointer }
+.seg input:checked + span { background: var(--teal); border-color: var(--teal); color: var(--surface) }
+.seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px }
+.txt { width: 100%; border: 1px solid var(--line); background: var(--tint); color: var(--ink); border-radius: 10px; padding: 0 12px; height: 44px; font: 15px var(--sans) }
+.toggles { display: flex; flex-wrap: wrap; gap: 16px 24px; font-size: 14.5px }
+.toggles label { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer }
+.toggles input { width: 20px; height: 20px; accent-color: var(--teal) }
+.toggles label.off { opacity: .45 }
+.sheetcard { background: var(--canvas); border: 1px solid var(--line); border-radius: 20px; padding: 18px; display: grid; gap: 12px; min-width: 0 }
+.sheetcard .fname { font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; font-weight: 500 }
+.entries { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; color: var(--mute); display: grid; gap: 4px; max-height: 210px; overflow: auto }
+.entries li { overflow-wrap: anywhere }
+.badge { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--teal-soft); color: var(--teal); margin-right: 6px }
+.badge.gold { background: color-mix(in srgb, var(--hit) 28%, transparent); color: var(--ink) }
+
+/* privacy list */
+.ledger { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px }
+.ledger li { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 18px 0; border-top: 1px solid var(--line) }
+.ledger .n { font-family: var(--mono); font-size: 12px; color: var(--teal); padding-top: 3px }
+.ledger h3 { margin-bottom: 4px }
+.ledger p { font-size: 15px; color: var(--mute) }
+@media (max-width: 900px) { .ledger { grid-template-columns: 1fr } }
+
+/* architecture */
+.arch { background: var(--canvas); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto }
+.arch svg { min-width: 860px; width: 100%; height: auto; font-family: var(--sans) }
+.arch .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2 }
+.arch .boxk { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 1.2 }
+.arch .boxd { fill: var(--cam); stroke: #22324A }
+.arch .t1 { font-size: 14px; font-weight: 700; fill: var(--ink) }
+.arch .t2 { font-size: 11.5px; fill: var(--mute); font-family: var(--mono) }
+.arch .td1 { font-size: 14px; font-weight: 700; fill: #E6EDF5 }
+.arch .td2 { font-size: 11.5px; fill: #93A4B8; font-family: var(--mono) }
+.arch .lane { font-family: var(--mono); font-size: 11px; fill: var(--teal); letter-spacing: .06em }
+.arch .ln { stroke: var(--mute); stroke-width: 1.4; fill: none }
+.arch .ln.d { stroke-dasharray: 5 5 }
+.arch .ah { fill: var(--mute) }
+.arch .lt { font-family: var(--mono); font-size: 10.5px; fill: var(--mute) }
+.arch .zone { fill: none; stroke: var(--teal); stroke-dasharray: 3 5; stroke-width: 1.2 }
+.below { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 26px; margin-top: 30px }
+@media (max-width: 900px) { .below { grid-template-columns: 1fr; gap: 18px } }
+.below h3 { margin-bottom: 6px }
+.below p { font-size: 15px; color: var(--mute) }
+
+/* prototype strip */
+.protos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px }
+.protos figure { margin: 0 }
+.protos img { width: 100%; height: auto; border-radius: 26px; border: 8px solid #0F1B2A; box-shadow: 0 14px 34px rgba(15,42,67,.18); background: #fff }
+.protos figcaption { font-size: 14px; margin-top: 14px; color: var(--mute) }
+.protos figcaption b { color: var(--ink); display: block; font-size: 15px }
+@media (max-width: 900px) { .protos { grid-template-columns: 1fr; max-width: 340px; margin: 0 auto } }
+.caveat { margin-top: 26px; background: color-mix(in srgb, var(--hit) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--hit) 60%, var(--line)); border-radius: 12px; padding: 14px 16px; font-size: 14.5px }
+
+/* tests */
+.tgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px }
+@media (max-width: 900px) { .tgrid { grid-template-columns: 1fr } }
+.bars { display: grid; gap: 6px }
+.bar { display: grid; grid-template-columns: 128px 1fr 28px; gap: 10px; align-items: center; font-family: var(--mono); font-size: 12px }
+.bar .tr { height: 12px; background: var(--tint); border-radius: 3px; overflow: hidden }
+.bar .tr i { display: block; height: 100%; background: var(--teal); border-radius: 3px }
+.bar b { font-weight: 500; text-align: right }
+table { width: 100%; border-collapse: collapse; font-size: 14px }
+th, td { text-align: left; padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--mute) }
+td.num { font-family: var(--mono); font-size: 13px; white-space: nowrap }
+.tablewrap { overflow-x: auto }
+
+/* status */
+.status { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px }
+@media (max-width: 900px) { .status { grid-template-columns: 1fr } }
+.store { border: 1.5px dashed var(--line); border-radius: 16px; padding: 22px; display: grid; gap: 10px }
+.store .big { font-family: var(--serif); font-size: 30px; line-height: 1.1 }
+.timeline { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); display: grid; gap: 14px }
+.timeline li { padding-left: 18px; position: relative; font-size: 14.5px }
+.timeline li::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--teal) }
+.timeline .v { font-family: var(--mono); font-size: 13px; font-weight: 600 }
+.timeline .dt { font-family: var(--mono); font-size: 12px; color: var(--mute); margin-left: 8px }
+.timeline p { color: var(--mute); font-size: 14px }
+pre.cmd { font-family: var(--mono); font-size: 13px; background: var(--cam); color: #D7E2EE; border-radius: 12px; padding: 16px; overflow-x: auto; margin: 0; line-height: 1.7 }
+pre.cmd .c { color: #7E90A6 }
+
+footer { max-width: var(--col); margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-left)) 48px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 14px; color: var(--mute) }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto }
+  .scanline { animation: none }
+  * { transition: none !important }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px }
+  .sheet { padding: 48px 18px 28px }
+  .sheet::before { inset: 8px; --l: 18px }
+  .folio { top: 14px; right: 18px }
+  .lede { font-size: 17.5px }
+  .film { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+  .sliders label { grid-template-columns: 82px 1fr 40px }
+  .bar { grid-template-columns: 106px 1fr 26px }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#top" aria-label="Liasse, back to top">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14B8A6"/><stop offset=".52" stop-color="#0F766E"/><stop offset="1" stop-color="#0F2A43"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#lg)"/><path d="M240,364V240H364M660,240H784V364M784,660V784H660M364,784H240V660" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/><path d="M408,316H596L670,390V700Q670,722 648,722H408Q386,722 386,700V338Q386,316 408,316Z" fill="#fff"/><rect x="300" y="532" width="424" height="30" rx="15" fill="#5EEAD4"/></svg>
+      Liasse
+    </a>
+    <nav aria-label="Sections">
+      <a href="#capture">Capture</a><a href="#crop">Crop</a><a href="#looks">Filters</a><a href="#search">Search</a><a href="#export">Export</a><a href="#privacy">Privacy</a><a href="#inside">Inside</a><a href="#status">Status</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch to dark theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+<!-- 1 -->
+<section class="sheet" id="top" aria-labelledby="h-hero">
+  <span class="folio" aria-hidden="true">1 / 10</span>
+  <div class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Liasse, a document scanner for Android</span>
+      <h1 id="h-hero">Paper in, searchable PDF out. <em>The phone keeps the rest.</em></h1>
+      <p class="lede">Liasse scans a page with the platform's own edge detection, straightens and cleans it, reads the text on the device and files it in a local library you can search word by word. It works with no network, and nothing is sent anywhere unless you connect your own Google Drive.</p>
+      <div class="facts">
+        <div><b>Android 9 and later</b><span>Expo React Native, TypeScript</span></div>
+        <div><b>Version 0.4.0</b><span>release build, 27 Oct 2026</span></div>
+        <div><b>Offline-first</b><span>capture to library with no network</span></div>
+        <div><b>Not on Google Play yet</b><span><a href="#status">see status</a></span></div>
+      </div>
+    </div>
+    <figure class="hero-art" style="margin:0" aria-label="Illustration: a photographed page with the detection outline and scan line">
+      <canvas id="heroCanvas" width="600" height="720" role="img" aria-label="Synthetic photo of a handwritten course page lying skewed on a desk"></canvas>
+      <svg class="quad" id="heroQuad" viewBox="0 0 600 720" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="chips" aria-hidden="true"><span><b>original</b>.jpg kept</span><span><b>render</b> derived</span><span><b>pdf</b> + text layer</span></div>
+    </figure>
+  </div>
+  <div class="stats" aria-label="Counted in the source">
+    <div class="stat"><span class="k">screens</span><span class="v">12</span><span class="d">route files under <code>app/</code>, plus the layout</span></div>
+    <div class="stat"><span class="k">jest tests</span><span class="v">154</span><span class="d">passing in 16 suites, run locally 30 Oct</span></div>
+    <div class="stat"><span class="k">filters</span><span class="v">6</span><span class="d">colour matrices, plus 3 sliders</span></div>
+    <div class="stat"><span class="k">export formats</span><span class="v">4</span><span class="d">PDF, JPEG, PNG, TXT</span></div>
+    <div class="stat"><span class="k">pages per document</span><span class="v">200</span><span class="d">hard cap, warned 10 pages before</span></div>
+    <div class="stat"><span class="k">dangerous permissions</span><span class="v">1</span><span class="d">the camera; five others blocked</span></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="sheet" id="capture" aria-labelledby="h-cap">
+  <span class="folio" aria-hidden="true">2 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Capture</span><h2 id="h-cap">Three ways in, <em>one batch</em> that survives a phone call.</h2></div>
+    <p>Every capture lands in a draft batch that is written to SQLite as it grows. If the app is killed mid-scan, the library shows a "Reprendre la numérisation" banner and the pages are still there.</p>
+  </div>
+  <div class="cols">
+    <div><span class="tag">tap the scan button</span><h3>The platform scanner</h3><p>The primary path opens Google's ML Kit document scanner through <code>react-native-document-scanner-plugin</code>. It finds the page, corrects perspective and hands back straightened pages. Liasse does not ship its own edge detector.</p></div>
+    <div><span class="tag">long-press the scan button</span><h3>The in-app camera</h3><p>A Vision Camera screen with flash (auto, torch, off), a composition grid and four modes: Document, Carte ID, Reçu, Tableau blanc. It is also the fallback when the ML Kit scanner cannot start.</p></div>
+    <div><span class="tag">from the camera screen</span><h3>Gallery import</h3><p>Uses the system photo picker, so no storage permission is needed. Non-JPEG images are converted; formats the renderer cannot decode, such as HEIC, are refused with a message.</p></div>
+  </div>
+  <div class="flow" aria-label="Primary flow">
+    <span>Bibliothèque</span><i>→</i><span>scan</span><i>→</i><span>batch: reorder, crop, delete with undo</span><i>→</i><span>save</span><i>→</i><span>background render + OCR</span><i>→</i><span>document</span>
+  </div>
+  <p class="mute" style="margin-top:22px;font-size:15px">The batch grid has three columns with index badges, drag to reorder (with TalkBack move actions as well), tap to crop, and delete with a five-second undo snackbar. Saving copies the files into the document folder and clears the inbox only after the database transaction commits, so a failed save leaves the batch intact.</p>
+</section>
+
+<!-- 3 crop demo -->
+<section class="sheet dark" id="crop" aria-labelledby="h-crop">
+  <span class="folio" aria-hidden="true">3 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Crop, try it</span><h2 id="h-crop">Drag a corner. <em>The original never changes.</em></h2></div>
+    <p>The crop screen stores four corners, a rotation and a look for each page, and re-derives the render from the untouched original. Below is the same maths as <code>src/lib/geometry.ts</code>: an 8-unknown homography, a convexity check that stops a handle before the outline folds, and a 2.5× loupe that jumps to the opposite side of your finger.</p>
+  </div>
+  <div class="demo">
+    <div>
+      <div class="stage" id="cropStage">
+        <canvas id="cropCanvas" width="600" height="720" role="img" aria-label="Synthetic photo of a page on a desk, with a draggable crop outline"></canvas>
+        <svg id="cropSvg" aria-label="Crop outline with four corner handles"></svg>
+        <div class="loupe" id="loupe"><canvas id="loupeCanvas" width="240" height="240"></canvas></div>
+      </div>
+      <p class="mute" style="font-size:13px;margin-top:10px">Handles are 22 px visually with 44 px hit targets. Keyboard: focus a corner, then use the arrow keys (Shift for bigger steps). The photo is generated in your browser; it is not a capture from the app.</p>
+    </div>
+    <div class="panel">
+      <div class="out"><canvas id="cropOut" width="300" height="400" role="img" aria-label="Straightened page computed from the outline"></canvas></div>
+      <div class="btns">
+        <button class="btn" type="button" id="rotL" aria-label="Rotate 90 degrees left">↺ −90°</button>
+        <button class="btn" type="button" id="rotR" aria-label="Rotate 90 degrees right">↻ +90°</button>
+        <button class="btn" type="button" id="fullPage">Pleine page</button>
+        <button class="btn primary" type="button" id="snapPage">Fit the page</button>
+      </div>
+      <div class="kv" aria-live="polite">
+        <span>render size</span><b id="kvSize">–</b>
+        <span>rotation</span><b id="kvRot">0°</b>
+        <span>last move</span><b id="kvMove">–</b>
+      </div>
+      <p class="note">Render size uses <code>outputSize()</code>: the longer of each pair of opposite edges, for a 3000 × 3600 px photo, capped at 4000 px. "Fit the page" is a demo shortcut; in the app the ML Kit scanner does detection.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 looks demo -->
+<section class="sheet dark" id="looks" aria-labelledby="h-looks">
+  <span class="folio" aria-hidden="true">4 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Filters, try them</span><h2 id="h-looks">Six looks, each one <em>a 4×5 colour matrix</em>.</h2></div>
+    <p>Filters and the brightness, contrast and sharpness sliders compose into one matrix plus an optional sharpen kernel, rendered with Skia in the app. SVG's <code>feColorMatrix</code> uses the same layout, so the numbers below are the app's own, applied live in your browser.</p>
+  </div>
+  <div class="demo">
+    <div class="look-view">
+      <svg id="lookSvg" viewBox="0 0 480 600" role="img" aria-label="Page rendered with the selected filter">
+        <defs>
+          <filter id="lookF" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+            <feColorMatrix id="lookM" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0" result="c"/>
+            <feConvolveMatrix id="lookK" in="c" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true" edgeMode="duplicate" result="k"/>
+            <feGaussianBlur id="lookB" in="k" stdDeviation="0"/>
+          </filter>
+        </defs>
+        <image id="lookImg" width="480" height="600" filter="url(#lookF)" preserveAspectRatio="none"/>
+      </svg>
+    </div>
+    <div class="panel">
+      <div class="film" id="film" role="group" aria-label="Filter"></div>
+      <div class="sliders">
+        <label>Luminosité <input type="range" id="sB" min="-100" max="100" value="0" aria-label="Brightness"><output id="oB">0</output></label>
+        <label>Contraste <input type="range" id="sC" min="-100" max="100" value="0" aria-label="Contrast"><output id="oC">0</output></label>
+        <label>Netteté <input type="range" id="sS" min="-100" max="100" value="0" aria-label="Sharpness"><output id="oS">0</output></label>
+      </div>
+      <pre class="matrix" id="matrixOut" aria-label="Resulting colour matrix"></pre>
+      <p class="note">Edits are stored per page and the render is regenerated from the original, so changing a look never touches the recognised text. Scanner pages start on "Original" (ML Kit already enhanced them); camera and gallery pages start on the default from Settings, "Auto".</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 search -->
+<section class="sheet" id="search" aria-labelledby="h-search">
+  <span class="folio" aria-hidden="true">5 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">OCR and search, try it</span><h2 id="h-search">Type four letters of a word <em>you wrote on page 7</em>.</h2></div>
+    <p>After saving, a background queue persisted in SQLite runs ML Kit text recognition (Latin script, on the device) on every page. Text, per-line boxes and confidence are stored; triggers feed an FTS5 index. One field then searches names, folders, tags and the text itself.</p>
+  </div>
+  <div class="demo demo-search">
+    <div class="phone" role="search">
+      <label class="field"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="color:var(--mute)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" value="photosynth" autocomplete="off" spellcheck="false" aria-label="Search the sample library"></label>
+      <div class="chiprow">
+        <button class="chip" type="button" id="f30" aria-pressed="false">30 derniers jours</button>
+        <button class="chip" type="button" id="fTxt" aria-pressed="false">Avec texte</button>
+      </div>
+      <div id="results" aria-live="polite"></div>
+      <p class="foot-note">Sample library of 5 documents written for this page. The matching rules are the app's.</p>
+    </div>
+    <div class="rules">
+      <div><h3>What the app does with your query</h3>
+        <ul>
+          <li>Folds case and accents first, so <code>recu</code> finds "Reçu" and <code>eleve</code> finds "élève".</li>
+          <li>Splits into at most 8 tokens; every token must match, each as a prefix: <code>fact</code> finds "facture".</li>
+          <li>Quotes every token before it reaches FTS5, so typed operators such as <code>OR</code> or <code>*</code> are searched as text, never run as syntax.</li>
+          <li>Groups text hits by page with a highlighted snippet and the page number; tapping one opens the document on that page.</li>
+        </ul></div>
+      <div><span class="lab mono mute" style="font-size:12px;display:block;margin-bottom:6px">match expression for your query</span><div class="fts" id="ftsOut"></div></div>
+      <p class="mute" style="font-size:15px">The OCR screen shows the recognised text as selectable text with an average-confidence figure, a toggle back to the source image, copy-all, a low-confidence warning and retry on failure. A Settings row states that cloud OCR is off and processing is 100 % on the device; there is no cloud OCR in the code.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 export -->
+<section class="sheet" id="export" aria-labelledby="h-export">
+  <span class="folio" aria-hidden="true">6 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Export, try it</span><h2 id="h-export">A PDF you can <em>search outside the app</em>.</h2></div>
+    <p>PDFs are assembled in plain JavaScript with pdf-lib. Each page is fitted inside A4 with no margins, the JPEG is embedded as-is at "Haute" quality, and recognised lines are laid invisibly at their true position, so the text can be selected and searched in any PDF reader. The planner below runs the same rules as <code>src/lib/exportPlan.ts</code>.</p>
+  </div>
+  <div class="demo demo-even">
+    <div class="form">
+      <div><label class="lab" for="eName">document name</label><input class="txt" id="eName" value="Manuel Biologie p. 88–95"></div>
+      <div><label class="lab" for="ePages">pages (1 to 200)</label><input class="txt" id="ePages" type="number" min="1" max="200" value="8" inputmode="numeric"></div>
+      <fieldset><legend>Format</legend><div class="seg" id="eFmt"></div></fieldset>
+      <fieldset><legend>Qualité</legend><div class="seg" id="eQ"></div></fieldset>
+      <div class="toggles">
+        <label id="lSplit"><input type="checkbox" id="eSplit"> Un fichier par page</label>
+        <label id="lOcr"><input type="checkbox" id="eOcr" checked> Inclure la couche OCR</label>
+      </div>
+    </div>
+    <div class="sheetcard" aria-live="polite">
+      <span class="lab mono mute" style="font-size:12px">handed to the share sheet</span>
+      <div class="fname" id="eFile"></div>
+      <div id="eBadges"></div>
+      <ul class="entries" id="eEntries"></ul>
+      <p class="mute" style="font-size:14px" id="eNote"></p>
+      <p class="mute" style="font-size:13px">The sheet also shows a live size estimate: exact for "Haute" PDF and JPEG (the stored files), otherwise the first page is encoded for real and the ratio applied to the rest. Password protection is listed as Premium and is not available yet.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 7 privacy -->
+<section class="sheet" id="privacy" aria-labelledby="h-priv">
+  <span class="folio" aria-hidden="true">7 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Privacy and security</span><h2 id="h-priv">No account. No server. <em>One permission.</em></h2></div>
+    <p>There is no Liasse backend. Every item below is enforced in the code or the Android manifest configuration, not just promised in copy.</p>
+  </div>
+  <ol class="ledger">
+    <li><span class="n">01</span><div><h3>The camera is the only dangerous permission</h3><p>Microphone, overlay and external storage permissions pulled in by templates and libraries are explicitly blocked, as is media access added by the screen-capture module.</p></div></li>
+    <li><span class="n">02</span><div><h3>Recognition stays on the phone</h3><p>OCR uses ML Kit's on-device Latin model. A config plugin strips ML Kit's telemetry endpoint from the manifest; recognition is unaffected.</p></div></li>
+    <li><span class="n">03</span><div><h3>App lock with the phone's own unlock</h3><p>Fingerprint, face or device PIN. Locks at cold start and after 30 s in the background. While on, screenshots and the recent-apps preview are blocked.</p></div></li>
+    <li><span class="n">04</span><div><h3>Bounded exceptions for its own flows</h3><p>The scanner may keep the lock off for up to 10 minutes, the photo picker, share sheet and Google sign-in for 2, and only for one trip away from the app.</p></div></li>
+    <li><span class="n">05</span><div><h3>Backup is opt-in and goes to your Drive</h3><p>Two non-sensitive scopes. Originals and manifests go to a hidden app folder; a readable PDF per document goes to a visible "Liasse" folder. Wi-Fi only by default.</p></div></li>
+    <li><span class="n">06</span><div><h3>What comes back from Drive is untrusted</h3><p>Manifests are rebuilt field by field: plain ids only, edits in range, size caps, nothing claiming another document's files.</p></div></li>
+    <li><span class="n">07</span><div><h3>Android Auto Backup is off</h3><p>Its 25 MB cap could restore a database without its images, so the app relies on its own backup instead.</p></div></li>
+    <li><span class="n">08</span><div><h3>Diagnostics you export yourself</h3><p>A report of counts, dates and durations, shared from Settings by you. Never document names, text, images or the Google account address.</p></div></li>
+  </ol>
+</section>
+
+<!-- 8 architecture -->
+<section class="sheet" id="inside" aria-labelledby="h-arch">
+  <span class="folio" aria-hidden="true">8 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Inside</span><h2 id="h-arch">Images on disk, <em>everything else in SQLite</em>.</h2></div>
+    <p>Page images live in the app's documents folder and are referenced by relative path, never stored as blobs. Metadata, edits, recognised text, the capture draft and the backup bookkeeping sit in one expo-sqlite database managed with Drizzle, 4 migrations so far.</p>
+  </div>
+  <div class="arch">
+    <svg viewBox="0 0 1100 470" role="img" aria-labelledby="archT archD">
+      <title id="archT">Liasse architecture</title>
+      <desc id="archD">Three capture paths feed a persisted draft. Saving writes files to disk and rows to SQLite. A background worker renders pages with Skia and runs ML Kit OCR; triggers index the text in FTS5 for search. Export builds PDFs with pdf-lib and hands them to the share sheet. Optional backup sends originals, manifests and PDFs to the user's Google Drive.</desc>
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+      <rect class="zone" x="8" y="26" width="840" height="436" rx="14"/>
+      <text class="lane" x="24" y="48">ON THE PHONE, WORKS OFFLINE</text>
+      <text class="lane" x="24" y="76">CAPTURE</text>
+      <rect class="boxd" x="24" y="88" width="210" height="58" rx="10"/><text class="td1" x="38" y="112">ML Kit scanner</text><text class="td2" x="38" y="132">detect + perspective crop</text>
+      <rect class="boxd" x="24" y="156" width="210" height="58" rx="10"/><text class="td1" x="38" y="180">Vision Camera</text><text class="td2" x="38" y="200">4 modes, flash, grid</text>
+      <rect class="boxd" x="24" y="224" width="210" height="58" rx="10"/><text class="td1" x="38" y="248">System photo picker</text><text class="td2" x="38" y="268">no storage permission</text>
+      <rect class="box" x="290" y="150" width="170" height="70" rx="10"/><text class="t1" x="304" y="176">Draft batch</text><text class="t2" x="304" y="196">capture_drafts</text><text class="t2" x="304" y="211">+ inbox files</text>
+      <path class="ln" d="M234 117 H262 V185 H286" marker-end="url(#ar)"/><path class="ln" d="M234 185 H286" marker-end="url(#ar)"/><path class="ln" d="M234 253 H262 V185" />
+      <rect class="boxk" x="510" y="88" width="300" height="78" rx="10"/><text class="t1" x="524" y="114">SQLite (expo-sqlite + Drizzle)</text><text class="t2" x="524" y="134">documents · pages · folders · tags</text><text class="t2" x="524" y="150">settings · events · pages_fts (FTS5)</text>
+      <rect class="box" x="510" y="196" width="300" height="62" rx="10"/><text class="t1" x="524" y="222">Files on disk</text><text class="t2" x="524" y="242">original (immutable) + render</text>
+      <path class="ln" d="M460 172 H486 V127 H506" marker-end="url(#ar)"/><path class="ln" d="M460 196 H486 V227 H506" marker-end="url(#ar)"/>
+      <text class="lt" x="290" y="240">save: one transaction</text>
+      <rect class="box" x="290" y="320" width="300" height="78" rx="10"/><text class="t1" x="304" y="346">Background worker</text><text class="t2" x="304" y="366">1 render: Skia, matrix + homography</text><text class="t2" x="304" y="382">2 OCR: ML Kit text recognition</text>
+      <path class="ln" d="M600 258 V300 H415 V316" marker-end="url(#ar)"/>
+      <path class="ln d" d="M590 345 H832 V150 H814" marker-end="url(#ar)"/><text class="lt" x="600" y="337">text + boxes → triggers → FTS5</text>
+      <rect class="box" x="580" y="384" width="120" height="56" rx="10"/><text class="t1" x="594" y="408">Search</text><text class="t2" x="594" y="426">FTS5 + names</text>
+      <rect class="box" x="712" y="384" width="120" height="56" rx="10"/><text class="t1" x="726" y="408">Export</text><text class="t2" x="726" y="426">pdf-lib, fflate</text>
+      <rect class="boxd" x="880" y="370" width="200" height="70" rx="10"/><text class="td1" x="894" y="396">Share sheet</text><text class="td2" x="894" y="416">PDF · JPEG · PNG · TXT</text><text class="td2" x="894" y="430">ZIP when several files</text>
+      <path class="ln" d="M832 412 H876" marker-end="url(#ar)"/>
+      <rect class="box" x="880" y="88" width="200" height="110" rx="10"/><text class="t1" x="894" y="114">Your Google Drive</text><text class="t2" x="894" y="134">optional, opt-in</text><text class="t2" x="894" y="154">appDataFolder: originals,</text><text class="t2" x="894" y="168">manifests · Liasse/: PDFs</text>
+      <path class="ln d" d="M814 104 H876" marker-end="url(#ar)" marker-start="url(#ar)"/><text class="lt" x="980" y="218" text-anchor="middle">⇄ backup / restore</text>
+    </svg>
+  </div>
+  <div class="below">
+    <div><h3>Non-destructive by rule</h3><p>The original capture is never overwritten. The render is derived from corners, rotation, filter and adjustments and can always be regenerated, which is how a restore from Drive rebuilds edited pages.</p></div>
+    <div><h3>Deletes are undoable, not confirmed</h3><p>Deleting a page or a document shows a five-second undo snackbar. Documents are soft-deleted and purged, with their whole folder, on a later start once the window has passed.</p></div>
+    <div><h3>Kind to the UI thread</h3><p>The worker waits for idle time and pauses between pages; renders use a GPU offscreen surface when available. A result is dropped if you edited the page while it was running.</p></div>
+  </div>
+</section>
+
+<!-- prototype strip -->
+<section class="sheet" id="screens" aria-labelledby="h-proto">
+  <span class="folio" aria-hidden="true">9 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Design</span><h2 id="h-proto">Twelve screens, <em>designed before they were built</em>.</h2></div>
+    <p>Liasse has its own "Slate & Teal" identity: navy for structure, teal for action, a bright teal reserved for the dark camera screens, amber only for highlights. The screens were first drawn as a clickable HTML prototype, then rebuilt natively in React Native with the prototype's French copy.</p>
+  </div>
+  <div class="protos">
+    <figure><img src="img/proto-crop.webp" width="540" height="1174" loading="lazy" alt="Prototype of the crop screen: dark background, a page outline with four teal corner handles and a round magnifier near the top-right corner, buttons Pleine page, Réinitialiser, Filtre Auto, Page suivante and Conserver."><figcaption><b>S3 · Vérifier le cadrage</b>Draggable outline and 2.5× loupe, both in the app; the bottom buttons differ.</figcaption></figure>
+    <figure><img src="img/proto-search.webp" width="540" height="1174" loading="lazy" alt="Prototype of the search screen: query photosynth, filter chips, two matching documents and three text matches with the word highlighted in amber and page numbers."><figcaption><b>S6 · Recherche</b>Document and text matches, amber highlights, page numbers. The app ships the 30-day and with-text filters.</figcaption></figure>
+    <figure><img src="img/proto-text.webp" width="540" height="1174" loading="lazy" alt="Prototype of the recognised text screen: Texte reconnu header with confidence, a Copier button, Texte and Image source tabs, paragraphs about photosynthesis and an on-device processing note."><figcaption><b>S9 · Texte reconnu</b>Selectable text, confidence, source toggle, copy. Built in the app.</figcaption></figure>
+  </div>
+  <p class="caveat"><b>These are renders of the HTML design prototype, not screenshots of the app.</b> Page thumbnails and illustrations in the prototype are placeholders, and some details differ from the shipped screens. No real captures from the phone are published yet.</p>
+</section>
+
+<!-- 10 tested + status -->
+<section class="sheet" id="status" aria-labelledby="h-status">
+  <span class="folio" aria-hidden="true">10 / 10</span>
+  <div class="head">
+    <div><span class="eyebrow">Tested and shipped so far</span><h2 id="h-status">Proven on one phone. <em>Not in a store yet.</em></h2></div>
+    <p>Logic is covered by Jest suites, including the database layer against a real SQLite engine and the Drive engine against a fake Drive. A Maestro flow drives capture to library on the emulator. The camera cannot be tested in a simulator, so slices were closed on a physical phone.</p>
+  </div>
+  <div class="tgrid">
+    <div>
+      <h3 style="margin-bottom:14px">Test cases declared per Jest suite</h3>
+      <div class="bars" id="bars" role="img" aria-label="Bar chart of test cases per suite, 146 in total"></div>
+      <p class="mute" style="font-size:13px;margin-top:12px" id="testNote">Counted from <code>test(</code> and <code>it(</code> calls in <code>__tests__/</code>; two are parameterised, so Jest runs 154 tests. All 16 suites and 154 tests passed in a local run on 30 Oct 2026.</p>
+    </div>
+    <div>
+      <h3 style="margin-bottom:6px">Phone test record, 26 Oct 2026</h3>
+      <p class="mute" style="font-size:14px;margin-bottom:10px">Samsung Galaxy A17 on Android 16, from the diagnostic report exported on the phone. Build 0.3.2, the same code as Liasse but still under the previous package name.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th scope="col">Step</th><th scope="col">Logged result</th></tr></thead>
+        <tbody>
+          <tr><td>Restore from Drive after reinstall</td><td class="num">4 restored, 0 failed</td></tr>
+          <tr><td>Renders rebuilt from restored edits</td><td class="num">3, 0.2–0.9 s each</td></tr>
+          <tr><td>ML Kit scan, saved to library</td><td class="num">1 page, saved in 2.6 s</td></tr>
+          <tr><td>On-device OCR</td><td class="num">confidence 0.79, 0.76 s</td></tr>
+          <tr><td>PDF export, OCR layer on</td><td class="num">283 KB in 0.1 s</td></tr>
+          <tr><td>Library state at the end</td><td class="num">5 docs, 12/12 pages with text</td></tr>
+        </tbody>
+      </table></div>
+      <p class="mute" style="font-size:13px;margin-top:10px">Batch reorder, other export formats, crop and filter edits, undo, search and the lock cycle were tested by hand on the same phone but are not in that log.</p>
+    </div>
+  </div>
+
+  <div class="status" style="margin-top:52px">
+    <div class="store">
+      <span class="eyebrow" style="margin:0">Availability</span>
+      <span class="big">Not on Google Play yet.</span>
+      <p class="mute" style="font-size:15px">Liasse is built as signed Android release builds and tested on a real phone; the store listing does not exist yet. It was called ScanFlow until 23 October 2026, when the name turned out to be taken on Google Play. Everything is free today: a Premium paywall is built but switched off, and there is no watermark.</p>
+      <p class="mute" style="font-size:15px">iOS: the stack is cross-platform, but no iOS build has been made or tested. The Google sign-in bridge used for Drive backup is Android only.</p>
+    </div>
+    <div>
+      <h3 style="margin-bottom:14px">Builds</h3>
+      <ol class="timeline">
+        <li><span class="v">0.4.0</span><span class="dt">27 Oct</span><p>Final package id for the store, versionCode 7.</p></li>
+        <li><span class="v">0.3.2</span><span class="dt">26 Oct</span><p>Diagnostic build used for the phone test record.</p></li>
+        <li><span class="v">0.3.1</span><span class="dt">23 Oct</span><p>Renamed to Liasse; diagnostic report export in Settings.</p></li>
+        <li><span class="v">0.3.0</span><span class="dt">20 Oct</span><p>Onboarding, full Settings, app lock, paywall (off). Not released: a startup crash was caught on the emulator and fixed in 0.3.1.</p></li>
+        <li><span class="v">0.2.0 – 0.2.1</span><span class="dt">18–19 Oct</span><p>Drive backup and restore, Android 9 minimum, own app icon.</p></li>
+      </ol>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <span>Built by Driss OUAAZIZ · 2026</span>
+  <span>Liasse is an independent project. Android is a trademark of Google LLC.</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- theme ---------- */
+  var root = document.documentElement, tbtn = document.getElementById('themeBtn');
+  function isDark() { var t = root.getAttribute('data-theme'); return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; }
+  function syncBtn() { tbtn.setAttribute('aria-label', isDark() ? 'Switch to light theme' : 'Switch to dark theme'); }
+  try { var saved = localStorage.getItem('liasse-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  syncBtn();
+  tbtn.addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next); syncBtn();
+    try { localStorage.setItem('liasse-theme', next); } catch (e) {}
+  });
+
+  /* ---------- geometry, ported from src/lib/geometry.ts ---------- */
+  function homography(src, dst) {
+    var A = [], i, r, k, col;
+    for (i = 0; i < 4; i++) {
+      var x = src[i][0], y = src[i][1], u = dst[i][0], v = dst[i][1];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y, u]);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y, v]);
+    }
+    for (col = 0; col < 8; col++) {
+      var piv = col;
+      for (r = col + 1; r < 8; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+      if (Math.abs(A[piv][col]) < 1e-12) throw new Error('Degenerate quad');
+      var tmp = A[col]; A[col] = A[piv]; A[piv] = tmp;
+      for (r = 0; r < 8; r++) {
+        if (r === col) continue;
+        var f = A[r][col] / A[col][col];
+        for (k = col; k < 9; k++) A[r][k] -= f * A[col][k];
+      }
+    }
+    var h = A.map(function (row, i) { return row[8] / row[i]; });
+    h.push(1); return h;
+  }
+  function apply(m, p) { var w = m[6] * p[0] + m[7] * p[1] + m[8]; return [(m[0] * p[0] + m[1] * p[1] + m[2]) / w, (m[3] * p[0] + m[4] * p[1] + m[5]) / w]; }
+  function isConvex(pts) {
+    var sign = 0;
+    for (var i = 0; i < 4; i++) {
+      var a = pts[i], b = pts[(i + 1) % 4], c = pts[(i + 2) % 4];
+      var cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+      if (Math.abs(cross) < 1e-9) return false;
+      var s = Math.sign(cross);
+      if (sign === 0) sign = s; else if (s !== sign) return false;
+    }
+    return true;
+  }
+  var dist = function (a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  function outputSize(q, w, h, maxSide) {
+    var px = q.map(function (p) { return [p[0] * w, p[1] * h]; });
+    var W = Math.max(dist(px[0], px[1]), dist(px[3], px[2])), H = Math.max(dist(px[0], px[3]), dist(px[1], px[2]));
+    var s = Math.min(1, maxSide / Math.max(W, H));
+    return { width: Math.max(1, Math.round(W * s)), height: Math.max(1, Math.round(H * s)) };
+  }
+  function loupeOrigin(f, box, size, margin) {
+    var left = f[0] > box.width / 2, top = f[1] > box.height / 2;
+    return [left ? margin : box.width - size - margin, top ? margin : box.height - size - margin];
+  }
+
+  /* ---------- synthetic page + photo ---------- */
+  var PW = 420, PH = 560;
+  var NOTES = [
+    ['h', 'Chapitre 4 — La photosynthèse'],
+    ['p', 'La photosynthèse convertit l’énergie lumineuse'],
+    ['p', 'en énergie chimique, dans les chloroplastes.'],
+    ['s', 'Phase claire (thylakoïdes)'],
+    ['p', 'la lumière est captée par la chlorophylle ;'],
+    ['p', 'photolyse de l’eau → O₂ libéré, ATP + NADPH'],
+    ['s', 'Phase sombre — cycle de Calvin'],
+    ['p', 'fixation du CO₂ dans le stroma, glucose'],
+    ['p', 'bilan : 6 CO₂ + 6 H₂O → C₆H₁₂O₆ + 6 O₂'],
+    ['b', ''],
+    ['s', 'À retenir pour le partiel'],
+    ['p', '• ne pas confondre respiration et photosynthèse'],
+    ['p', '• Ingenhousz, 1779 : rôle de la lumière'],
+    ['p', '• revoir le schéma p. 92 du manuel']
+  ];
+  function makePage() {
+    var c = document.createElement('canvas'); c.width = PW; c.height = PH;
+    var g = c.getContext('2d');
+    g.fillStyle = '#fbfaf6'; g.fillRect(0, 0, PW, PH);
+    g.strokeStyle = 'rgba(80,130,190,.28)'; g.lineWidth = 1;
+    for (var y = 84; y < PH - 20; y += 28) { g.beginPath(); g.moveTo(0, y); g.lineTo(PW, y); g.stroke(); }
+    g.strokeStyle = 'rgba(210,80,80,.35)'; g.beginPath(); g.moveTo(44, 0); g.lineTo(44, PH); g.stroke();
+    var hand = '"Caveat", "Segoe Print", cursive';
+    var y0 = 56;
+    NOTES.forEach(function (n) {
+      if (n[0] === 'h') { g.fillStyle = '#16305a'; g.font = '600 25px ' + hand; g.fillText(n[1], 54, y0 + 22); y0 += 28; return; }
+      if (n[0] === 'b') { y0 += 28; return; }
+      g.fillStyle = n[0] === 's' ? '#0d5a54' : '#1d3b78';
+      g.font = (n[0] === 's' ? '600 20px ' : '500 17.5px ') + hand;
+      g.fillText(n[1], n[0] === 's' ? 54 : 60, y0 + 22); y0 += 28;
+    });
+    g.strokeStyle = '#0d5a54'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(54, 86); g.lineTo(330, 86); g.stroke();
+    return c;
+  }
+  var PHOTO_W = 600, PHOTO_H = 720;
+  var TRUE_Q = [[0.20, 0.14], [0.83, 0.20], [0.78, 0.89], [0.12, 0.82]];
+  function makePhoto(page) {
+    var c = document.createElement('canvas'); c.width = PHOTO_W; c.height = PHOTO_H;
+    var g = c.getContext('2d');
+    var src = page.getContext('2d').getImageData(0, 0, PW, PH).data;
+    var img = g.createImageData(PHOTO_W, PHOTO_H), d = img.data;
+    var quadPx = TRUE_Q.map(function (p) { return [p[0] * PHOTO_W, p[1] * PHOTO_H]; });
+    var H = homography(quadPx, [[0, 0], [PW, 0], [PW, PH], [0, PH]]);
+    var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var y = 0; y < PHOTO_H; y++) {
+      for (var x = 0; x < PHOTO_W; x++) {
+        var o = (y * PHOTO_W + x) * 4;
+        var light = 1.05 - 0.45 * Math.hypot((x - 380) / PHOTO_W, (y - 180) / PHOTO_H);
+        var uv = apply(H, [x + 0.5, y + 0.5]), r, gg, b;
+        if (uv[0] >= 0 && uv[0] < PW && uv[1] >= 0 && uv[1] < PH) {
+          var so = ((uv[1] | 0) * PW + (uv[0] | 0)) * 4;
+          r = src[so] * 0.97; gg = src[so + 1] * 0.94; b = src[so + 2] * 0.86;
+          light *= 0.92;
+        } else {
+          var grain = 0.85 + 0.15 * Math.sin(x * 0.045 + Math.sin(y * 0.012) * 6) + rnd() * 0.08;
+          r = 92 * grain; gg = 64 * grain; b = 44 * grain;
+        }
+        d[o] = Math.min(255, r * light); d[o + 1] = Math.min(255, gg * light); d[o + 2] = Math.min(255, b * light); d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) { var e = document.createElementNS(SVGNS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+  function boot() {
+    var page = makePage(), photo = makePhoto(page);
+
+    /* hero */
+    var hc = document.getElementById('heroCanvas'); hc.getContext('2d').drawImage(photo, 0, 0);
+    var hq = document.getElementById('heroQuad');
+    var pts = TRUE_Q.map(function (p) { return (p[0] * 600) + ',' + (p[1] * 720); }).join(' ');
+    el('polygon', { points: pts, fill: 'rgba(15,118,110,.20)', stroke: '#14B8A6', 'stroke-width': 3, 'stroke-linejoin': 'round' }, hq);
+    TRUE_Q.forEach(function (p) { el('circle', { cx: p[0] * 600, cy: p[1] * 720, r: 11, fill: '#fff', stroke: '#14B8A6', 'stroke-width': 4 }, hq); });
+    var clip = el('clipPath', { id: 'hclip' }, el('defs', {}, hq)); el('polygon', { points: pts }, clip);
+    var sl = el('g', { 'clip-path': 'url(#hclip)' }, hq);
+    var line = el('rect', { x: 60, y: 96, width: 480, height: 8, rx: 4, fill: '#5EEAD4', opacity: .85, 'class': 'scanline' }, sl);
+    line.style.transformBox = 'view-box';
+
+    /* crop demo */
+    cropDemo(photo);
+    /* looks demo */
+    looksDemo(page);
+  }
+
+  function cropDemo(photo) {
+    var stage = document.getElementById('cropStage'), cv = document.getElementById('cropCanvas'), svg = document.getElementById('cropSvg');
+    cv.getContext('2d').drawImage(photo, 0, 0);
+    var srcData = photo.getContext('2d').getImageData(0, 0, PHOTO_W, PHOTO_H).data;
+    var out = document.getElementById('cropOut'), octx = out.getContext('2d');
+    var loupe = document.getElementById('loupe'), lc = document.getElementById('loupeCanvas').getContext('2d');
+    var q = [[0.27, 0.22], [0.74, 0.26], [0.70, 0.80], [0.22, 0.74]];
+    var rot = 0;
+    var NAMES = ['Top-left', 'Top-right', 'Bottom-right', 'Bottom-left'];
+    var poly = el('polygon', { fill: 'rgba(15,118,110,.20)', stroke: '#14B8A6', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    var handles = q.map(function (_, i) {
+      var g = el('g', { 'class': 'handle', tabindex: 0, role: 'slider', 'aria-label': NAMES[i] + ' corner' }, svg);
+      el('circle', { r: 22, fill: 'transparent' }, g);
+      el('circle', { r: 11, fill: '#fff', stroke: '#14B8A6', 'stroke-width': 3, 'class': 'ring' }, g);
+      return g;
+    });
+    var box = { width: 1, height: 1 };
+    function layout() {
+      box.width = cv.clientWidth; box.height = cv.clientHeight;
+      svg.setAttribute('width', box.width); svg.setAttribute('height', box.height);
+      svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
+      draw();
+    }
+    function disp(p) { return [p[0] * box.width, p[1] * box.height]; }
+    function draw() {
+      poly.setAttribute('points', q.map(function (p) { return disp(p).join(','); }).join(' '));
+      handles.forEach(function (h, i) {
+        var d = disp(q[i]); h.setAttribute('transform', 'translate(' + d[0] + ' ' + d[1] + ')');
+        h.setAttribute('aria-valuetext', NAMES[i] + ' corner at ' + Math.round(q[i][0] * 100) + '% across, ' + Math.round(q[i][1] * 100) + '% down');
+      });
+      scheduleRender();
+    }
+    var pending = false;
+    function scheduleRender() { if (pending) return; pending = true; requestAnimationFrame(function () { pending = false; render(); }); }
+    function render() {
+      var real = outputSize(q, 3000, 3600, 4000);
+      var portraitW = rot % 180 === 0 ? real.width : real.height, portraitH = rot % 180 === 0 ? real.height : real.width;
+      document.getElementById('kvSize').textContent = portraitW + ' × ' + portraitH + ' px';
+      document.getElementById('kvRot').textContent = rot + '°';
+      var s = Math.min(300 / real.width, 380 / real.height);
+      var w = Math.max(1, Math.round(real.width * s)), h = Math.max(1, Math.round(real.height * s));
+      var Hm = homography([[0, 0], [w, 0], [w, h], [0, h]], q.map(function (p) { return [p[0] * PHOTO_W, p[1] * PHOTO_H]; }));
+      var tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+      var tctx = tmp.getContext('2d'), img = tctx.createImageData(w, h), d = img.data;
+      for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+        var p = apply(Hm, [x + 0.5, y + 0.5]), sx = p[0] | 0, sy = p[1] | 0, o = (y * w + x) * 4;
+        if (sx >= 0 && sy >= 0 && sx < PHOTO_W && sy < PHOTO_H) { var so = (sy * PHOTO_W + sx) * 4; d[o] = srcData[so]; d[o + 1] = srcData[so + 1]; d[o + 2] = srcData[so + 2]; d[o + 3] = 255; }
+      }
+      tctx.putImageData(img, 0, 0);
+      var swap = rot % 180 !== 0;
+      out.width = swap ? h : w; out.height = swap ? w : h;
+      octx.save(); octx.translate(out.width / 2, out.height / 2); octx.rotate(rot * Math.PI / 180); octx.drawImage(tmp, -w / 2, -h / 2); octx.restore();
+    }
+    function tryMove(i, p, how) {
+      var next = q.map(function (c) { return c.slice(); });
+      next[i] = [Math.min(1, Math.max(0, p[0])), Math.min(1, Math.max(0, p[1]))];
+      var ok = isConvex(next);
+      if (ok) q = next;
+      document.getElementById('kvMove').textContent = ok ? NAMES[i].toLowerCase() + ' ' + how : 'refused: would fold the outline';
+      draw();
+      return ok;
+    }
+    function showLoupe(i, finger) {
+      var o = loupeOrigin(finger, box, 120, 8);
+      loupe.style.display = 'block'; loupe.style.left = (12 + o[0]) + 'px'; loupe.style.top = (12 + o[1]) + 'px';
+      var cx = q[i][0] * PHOTO_W, cy = q[i][1] * PHOTO_H, zoom = 2.5 * (box.width / PHOTO_W), span = 120 / zoom;
+      lc.clearRect(0, 0, 240, 240);
+      lc.drawImage(cv, cx - span / 2, cy - span / 2 * (PHOTO_H / PHOTO_H), span, span, 0, 0, 240, 240);
+      lc.strokeStyle = '#14B8A6'; lc.lineWidth = 3; lc.beginPath();
+      q.forEach(function (c, k) { var lx = (c[0] * PHOTO_W - cx) / span * 240 + 120, ly = (c[1] * PHOTO_H - cy) / span * 240 + 120; if (k) lc.lineTo(lx, ly); else lc.moveTo(lx, ly); });
+      lc.closePath(); lc.stroke();
+      lc.strokeStyle = '#fff'; lc.lineWidth = 2; lc.beginPath(); lc.moveTo(120, 106); lc.lineTo(120, 134); lc.moveTo(106, 120); lc.lineTo(134, 120); lc.stroke();
+    }
+    var drag = null;
+    function local(e) { var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+    stage.addEventListener('pointerdown', function (e) {
+      var f = local(e), best = null, bd = 40;
+      q.forEach(function (c, i) { var d = dist(disp(c), f); if (d <= bd) { bd = d; best = i; } });
+      if (best === null) return;
+      e.preventDefault(); drag = { i: best, off: [disp(q[best])[0] - f[0], disp(q[best])[1] - f[1]] };
+      stage.setPointerCapture(e.pointerId); handles[best].focus({ preventScroll: true });
+      showLoupe(best, f);
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var f = local(e);
+      tryMove(drag.i, [(f[0] + drag.off[0]) / box.width, (f[1] + drag.off[1]) / box.height], 'dragged');
+      showLoupe(drag.i, f);
+    });
+    function end() { drag = null; loupe.style.display = 'none'; }
+    stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+    handles.forEach(function (h, i) {
+      h.addEventListener('keydown', function (e) {
+        var step = e.shiftKey ? 0.05 : 0.01, dx = 0, dy = 0;
+        if (e.key === 'ArrowLeft') dx = -step; else if (e.key === 'ArrowRight') dx = step; else if (e.key === 'ArrowUp') dy = -step; else if (e.key === 'ArrowDown') dy = step; else return;
+        e.preventDefault(); tryMove(i, [q[i][0] + dx, q[i][1] + dy], 'moved with keys');
+      });
+    });
+    document.getElementById('rotL').onclick = function () { rot = (rot + 270) % 360; render(); };
+    document.getElementById('rotR').onclick = function () { rot = (rot + 90) % 360; render(); };
+    document.getElementById('fullPage').onclick = function () { q = [[0, 0], [1, 0], [1, 1], [0, 1]]; document.getElementById('kvMove').textContent = 'full frame'; draw(); };
+    document.getElementById('snapPage').onclick = function () { q = TRUE_Q.map(function (p) { return p.slice(); }); document.getElementById('kvMove').textContent = 'fitted to the page'; draw(); };
+    window.addEventListener('resize', layout);
+    layout();
+  }
+
+  /* ---------- looks, ported from src/lib/look.ts ---------- */
+  var ID = [1,0,0,0,0, 0,1,0,0,0, 0,0,1,0,0, 0,0,0,1,0];
+  function concat(a, b) { var o = new Array(20).fill(0); for (var r = 0; r < 4; r++) for (var c = 0; c < 5; c++) { var v = c === 4 ? a[r*5+4] : 0; for (var k = 0; k < 4; k++) v += a[r*5+k] * b[k*5+c]; o[r*5+c] = v; } return o; }
+  var bright = function (k) { return [k,0,0,0,0, 0,k,0,0,0, 0,0,k,0,0, 0,0,0,1,0]; };
+  function contrast(k) { var t = 0.5 * (1 - k); return [k,0,0,0,t, 0,k,0,0,t, 0,0,k,0,t, 0,0,0,1,0]; }
+  function saturate(s) { var lr = .2126, lg = .7152, lb = .0722; return [lr+(1-lr)*s, lg-lg*s, lb-lb*s, 0, 0, lr-lr*s, lg+(1-lg)*s, lb-lb*s, 0, 0, lr-lr*s, lg-lg*s, lb+(1-lb)*s, 0, 0, 0,0,0,1,0]; }
+  var lift = function (d) { return [1,0,0,0,d, 0,1,0,0,d, 0,0,1,0,d, 0,0,0,1,0]; };
+  function chain() { var ms = Array.prototype.slice.call(arguments); return ms.reduce(function (acc, m) { return concat(m, acc); }, ID); }
+  var FILTERS = [['original','Original'],['auto','Auto'],['bw','N&B'],['grayscale','Niveaux de gris'],['enhanced','Renforcé'],['photo','Photo']];
+  function filterMatrix(f) {
+    switch (f) {
+      case 'auto': return chain(contrast(1.08), bright(1.04));
+      case 'bw': return chain(saturate(0), contrast(2.6), bright(1.1));
+      case 'grayscale': return chain(saturate(0), contrast(1.1));
+      case 'enhanced': return chain(saturate(1.15), contrast(1.2), bright(1.06));
+      case 'photo': return chain(saturate(1.05), contrast(1.02));
+      default: return ID;
+    }
+  }
+  function lookMatrix(f, a) { return chain(filterMatrix(f), contrast(1 + a.contrast * 0.6), lift(a.brightness * 0.3)); }
+  function sharpenKernel(s) { if (s <= 0) return null; var k = s * 1.2; return [0,-k,0, -k,1+4*k,-k, 0,-k,0]; }
+  var fmt = function (n) { var v = Math.round(n * 1000) / 1000; return (v >= 0 ? ' ' : '') + v.toFixed(3); };
+
+  function looksDemo(page) {
+    // a "photo" of the page: unwarped, with uneven light and a warm cast
+    var c = document.createElement('canvas'); c.width = 480; c.height = 600;
+    var g = c.getContext('2d'); g.drawImage(page, 0, 0, 480, 640);
+    var grd = g.createRadialGradient(330, 140, 40, 260, 300, 520); grd.addColorStop(0, 'rgba(255,240,215,0)'); grd.addColorStop(1, 'rgba(120,95,60,.42)');
+    g.fillStyle = grd; g.fillRect(0, 0, 480, 600);
+    g.fillStyle = 'rgba(160,120,60,.10)'; g.fillRect(0, 0, 480, 600);
+    var url = c.toDataURL('image/jpeg', 0.9);
+    var img = document.getElementById('lookImg'); img.setAttribute('href', url);
+    var film = document.getElementById('film'), cur = 'auto';
+    FILTERS.forEach(function (f, i) {
+      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', f[0] === cur);
+      b.innerHTML = '<svg viewBox="0 0 480 600" aria-hidden="true"><defs><filter id="tf' + i + '" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="' + filterMatrix(f[0]).join(' ') + '"/></filter></defs><image href="' + url + '" width="480" height="600" filter="url(#tf' + i + ')"/></svg>' + f[1];
+      b.onclick = function () { cur = f[0]; Array.prototype.forEach.call(film.children, function (x) { x.setAttribute('aria-pressed', 'false'); }); b.setAttribute('aria-pressed', 'true'); update(); };
+      film.appendChild(b);
+    });
+    var sB = document.getElementById('sB'), sC = document.getElementById('sC'), sS = document.getElementById('sS');
+    function lab(v) { return v > 0 ? '+' + v : String(v); }
+    function update() {
+      var a = { brightness: sB.value / 100, contrast: sC.value / 100, sharpness: sS.value / 100 };
+      document.getElementById('oB').textContent = lab(+sB.value); document.getElementById('oC').textContent = lab(+sC.value); document.getElementById('oS').textContent = lab(+sS.value);
+      var m = lookMatrix(cur, a);
+      document.getElementById('lookM').setAttribute('values', m.join(' '));
+      var k = sharpenKernel(a.sharpness) || [0,0,0, 0,1,0, 0,0,0];
+      document.getElementById('lookK').setAttribute('kernelMatrix', k.join(' '));
+      document.getElementById('lookB').setAttribute('stdDeviation', a.sharpness < 0 ? (-a.sharpness * 2 * 480 / 1600).toFixed(2) : 0);
+      var rows = []; for (var r = 0; r < 4; r++) rows.push('[' + m.slice(r * 5, r * 5 + 5).map(fmt).join(' ') + ' ]');
+      document.getElementById('matrixOut').textContent = 'lookMatrix("' + cur + '", { b: ' + a.brightness + ', c: ' + a.contrast + ', s: ' + a.sharpness + ' })\n' + rows.join('\n') + (a.sharpness > 0 ? '\nsharpen k = ' + (a.sharpness * 1.2).toFixed(2) : '');
+    }
+    [sB, sC, sS].forEach(function (s) { s.addEventListener('input', update); });
+    update();
+  }
+
+  /* ---------- search, rules from src/db/repo/search.ts ---------- */
+  var fold = function (s) { return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase(); };
+  function tokens(input) { return fold(input).split(/[^\p{L}\p{N}]+/u).filter(Boolean).slice(0, 8); }
+  function ftsQuery(input) { var t = tokens(input); return t.length === 0 ? null : t.map(function (x) { return '"' + x.replace(/"/g, '""') + '"*'; }).join(' '); }
+  var DAY = 86400000, NOW = Date.now();
+  var LIB = [
+    { name: 'Notes CM Histoire — Chap. 4', folder: 'Cours', tags: ['partiel'], age: 3, ocr: true, pages: ['La Révolution industrielle en Europe, 1780–1850.', 'Le charbon et la machine à vapeur transforment le travail ; essor des villes ouvrières.', 'Les chemins de fer relient les bassins miniers aux ports.', 'Conditions de vie : logements insalubres, travail des enfants, premières lois.', 'Naissance du mouvement ouvrier et des syndicats.', 'Comparer avec la photographie de Lewis Hine vue en TD.', 'À retenir : Ingenhousz n’a rien à voir ici, ne pas mélanger avec la bio.'] },
+    { name: 'Manuel Biologie p. 88–95', folder: 'Manuels', tags: ['bio'], age: 4, ocr: true, pages: ['Chapitre 4 — La photosynthèse.', 'La lumière est captée par la chlorophylle, puis la photosynthèse convertit alors le CO₂ en glucose.', 'Phase claire : photolyse de l’eau, production d’ATP et de NADPH dans les thylakoïdes.', 'Phase sombre : le cycle de Calvin fixe le CO₂ dans le stroma.', 'Respiration cellulaire et photosynthèse : deux processus complémentaires.', 'Facteurs limitants : lumière, température, concentration en CO₂.', 'La découverte tardive du mécanisme de la photosynthèse par Ingenhousz en 1779.', 'Exercices : schéma bilan à compléter.'] },
+    { name: 'TD Statistiques — corrigé', folder: 'Révisions', tags: ['maths'], age: 12, ocr: true, pages: ['Exercice 1 : moyenne, médiane et écart type de la série.', 'Exercice 2 : jeu de données « rendement / photosynthèse » à normaliser avant régression.', 'Exercice 3 : intervalle de confiance à 95 %.'] },
+    { name: 'Certificat de scolarité 2026', folder: 'Administratif', tags: ['caf'], age: 41, ocr: true, pages: ['Certificat de scolarité. Le directeur certifie que l’élève est inscrite pour l’année universitaire 2026–2027 en Licence 2 Sciences de la vie.'] },
+    { name: 'Reçu librairie', folder: 'Administratif', tags: [], age: 1, ocr: false, pages: [''] }
+  ];
+  var f30 = false, fTxt = false;
+  function snippet(text, toks) {
+    var words = text.split(/(\s+)/), idx = [], plain = [];
+    words.forEach(function (w, i) { if (/\S/.test(w)) plain.push(i); });
+    var first = -1;
+    plain.forEach(function (wi, n) { var fw = tokens(words[wi]); if (fw.some(function (x) { return toks.some(function (t) { return x.indexOf(t) === 0; }); })) { idx.push(wi); if (first < 0) first = n; } });
+    var start = Math.max(0, first - 4), end = Math.min(plain.length, start + 12);
+    var html = start > 0 ? '…' : '';
+    for (var n = start; n < end; n++) {
+      var wi = plain[n], w = words[wi], esc = w.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+      html += (n > start ? ' ' : '') + (idx.indexOf(wi) >= 0 ? '<mark>' + esc + '</mark>' : esc);
+    }
+    return html + (end < plain.length ? '…' : '');
+  }
+  function runSearch() {
+    var input = document.getElementById('q').value, t = tokens(input), out = document.getElementById('results');
+    var fq = ftsQuery(input);
+    document.getElementById('ftsOut').textContent = fq ? 'pages_fts MATCH \'' + fq + '\'\ntokenize = "unicode61 remove_diacritics 2"' : '(empty query: nothing is searched)';
+    if (!t.length) { out.innerHTML = '<p class="empty">Type to search names, folders, tags and recognised text.</p>'; return; }
+    var live = LIB.filter(function (d) { return (!f30 || d.age <= 30) && (!fTxt || d.ocr); });
+    var docs = live.filter(function (d) { var hay = fold([d.name, d.folder].concat(d.tags).join(' ')); return t.every(function (x) { return hay.indexOf(x) >= 0; }); });
+    var hits = [];
+    live.forEach(function (d) { if (!d.ocr) return; d.pages.forEach(function (p, i) { var words = tokens(p); if (t.every(function (x) { return words.some(function (w) { return w.indexOf(x) === 0; }); })) hits.push({ d: d, i: i, s: snippet(p, t) }); }); });
+    var esc = function (s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+    var h = '';
+    h += '<p class="grp">Documents · ' + docs.length + '</p>';
+    h += docs.length ? '<ul class="res">' + docs.map(function (d) { return '<li><span class="t">' + esc(d.name) + '</span><span class="s">' + esc(d.folder) + ' · ' + d.pages.length + (d.pages.length > 1 ? ' pages' : ' page') + '</span></li>'; }).join('') + '</ul>' : '<p class="empty">No name, folder or tag matches.</p>';
+    h += '<p class="grp">Correspondances de texte · ' + hits.length + '</p>';
+    h += hits.length ? '<ul class="res">' + hits.slice(0, 6).map(function (x) { return '<li><span class="t">' + esc(x.d.name) + '<span>p. ' + (x.i + 1) + '</span></span><span class="s">' + x.s + '</span></li>'; }).join('') + '</ul>' : '<p class="empty">No recognised text matches every word.</p>';
+    out.innerHTML = h;
+  }
+  var qIn = document.getElementById('q'), deb;
+  qIn.addEventListener('input', function () { clearTimeout(deb); deb = setTimeout(runSearch, 250); });
+  [['f30', function (v) { f30 = v; }], ['fTxt', function (v) { fTxt = v; }]].forEach(function (p) {
+    var b = document.getElementById(p[0]);
+    b.addEventListener('click', function () { var v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); p[1](v); runSearch(); });
+  });
+  runSearch();
+
+  /* ---------- export planner, rules from src/lib/exportPlan.ts + naming.ts ---------- */
+  function exportFileName(name, ext, suffix) {
+    var base = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').replace(/^[\s.-]+|[\s.-]+$/g, '').slice(0, 80).trim() || 'Liasse';
+    var n = suffix === undefined ? '' : ' - p' + String(suffix).padStart(3, '0');
+    return base + n + '.' + ext;
+  }
+  var EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png', txt: 'txt' };
+  var MIME = { pdf: 'application/pdf', jpeg: 'image/jpeg', png: 'image/png', txt: 'text/plain', zip: 'application/zip' };
+  var QUAL = { high: ['Haute', null], standard: ['Standard', { maxSide: 2200, quality: 80 }], compact: ['Compacte', { maxSide: 1500, quality: 60 }] };
+  function planExport(name, n, o) {
+    var ext = EXT[o.format], all = []; for (var i = 0; i < n; i++) all.push(i);
+    var perPage = o.format === 'jpeg' || o.format === 'png' || (o.format === 'pdf' && o.splitPages);
+    if (!perPage || n === 1) return { fileName: exportFileName(name, ext), mimeType: MIME[o.format], zipped: false, entries: [{ name: exportFileName(name, ext), pages: perPage ? [0] : all }] };
+    return { fileName: exportFileName(name, 'zip'), mimeType: MIME.zip, zipped: true, entries: all.map(function (i) { return { name: exportFileName(name, ext, i + 1), pages: [i] }; }) };
+  }
+  var opts = { format: 'pdf', quality: 'standard', splitPages: false, ocrLayer: true };
+  function seg(id, name, items, key) {
+    var host = document.getElementById(id);
+    items.forEach(function (it) {
+      var l = document.createElement('label');
+      l.innerHTML = '<input type="radio" name="' + name + '" value="' + it[0] + '"' + (opts[key] === it[0] ? ' checked' : '') + '><span>' + it[1] + '</span>';
+      l.querySelector('input').addEventListener('change', function () { opts[key] = it[0]; plan(); });
+      host.appendChild(l);
+    });
+  }
+  seg('eFmt', 'fmt', [['pdf', 'PDF'], ['jpeg', 'JPEG'], ['png', 'PNG'], ['txt', 'TXT']], 'format');
+  seg('eQ', 'q', [['high', 'Haute'], ['standard', 'Standard'], ['compact', 'Compacte']], 'quality');
+  function plan() {
+    var n = Math.max(1, Math.min(200, parseInt(document.getElementById('ePages').value, 10) || 1));
+    opts.splitPages = document.getElementById('eSplit').checked; opts.ocrLayer = document.getElementById('eOcr').checked;
+    var isPdf = opts.format === 'pdf';
+    document.getElementById('eSplit').disabled = !isPdf; document.getElementById('eOcr').disabled = !isPdf;
+    document.getElementById('lSplit').className = isPdf ? '' : 'off'; document.getElementById('lOcr').className = isPdf ? '' : 'off';
+    var p = planExport(document.getElementById('eName').value, n, opts);
+    document.getElementById('eFile').textContent = p.fileName;
+    var b = '<span class="badge">' + p.mimeType + '</span>';
+    if (p.zipped) b += '<span class="badge gold">ZIP, stored without compression</span>';
+    if (isPdf && opts.ocrLayer) b += '<span class="badge">invisible text layer</span>';
+    document.getElementById('eBadges').innerHTML = b;
+    var ul = document.getElementById('eEntries'); ul.innerHTML = '';
+    p.entries.slice(0, 6).forEach(function (e) { var li = document.createElement('li'); li.textContent = e.name + '  ← page' + (e.pages.length > 1 ? 's 1–' + e.pages.length : ' ' + (e.pages[0] + 1)); ul.appendChild(li); });
+    if (p.entries.length > 6) { var li = document.createElement('li'); li.textContent = '… and ' + (p.entries.length - 6) + ' more'; ul.appendChild(li); }
+    var q = QUAL[opts.quality][1], note;
+    if (opts.format === 'txt') note = 'One text file with every page’s recognised text; quality does not apply.';
+    else if (opts.format === 'png') note = 'PNG re-encoded upright' + (q ? ', longest side ' + q.maxSide + ' px.' : ', up to 10,000 px on the longest side.');
+    else note = q ? 'Pages re-encoded as JPEG, longest side ' + q.maxSide + ' px, quality ' + q.quality + '.' : 'Stored JPEG bytes used as-is: no re-encode, the capture’s exact pixels.';
+    document.getElementById('eNote').textContent = note;
+  }
+  ['eName', 'ePages', 'eSplit', 'eOcr'].forEach(function (id) { document.getElementById(id).addEventListener('input', plan); document.getElementById(id).addEventListener('change', plan); });
+  plan();
+
+  /* ---------- test bars ---------- */
+  var SUITES = [['backup', 22], ['ocr', 16], ['geometry', 15], ['slice6', 13], ['pdf', 11], ['batch', 9], ['exportPlan', 9], ['look', 8], ['documents.repo', 8], ['search', 7], ['drafts.settings', 6], ['diagnostics', 5], ['pages.repo', 5], ['naming', 5], ['jpeg', 4], ['paths', 3]];
+  document.getElementById('bars').innerHTML = SUITES.map(function (s) { return '<div class="bar"><span>' + s[0] + '</span><span class="tr"><i style="width:' + (s[1] / 22 * 100) + '%"></i></span><b>' + s[1] + '</b></div>'; }).join('');
+
+  /* ---------- boot after fonts so the handwriting renders ---------- */
+  var started = false;
+  function go() { if (started) return; started = true; try { boot(); } catch (e) { console.error(e); } }
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('500 17.5px Caveat'), document.fonts.load('600 25px Caveat')]).then(go, go);
+    setTimeout(go, 2500);
+  } else go();
+  if (reduce) { /* scan line is static via CSS */ }
+})();
+</script>
+</body>
+</html>

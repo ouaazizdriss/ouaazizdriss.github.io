@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FileFlow</title>
+<meta name="description" content="FileFlow is a self-hosted file sharing platform: public links with passwords, expiry and download caps, internal shares, team folders and upload requests, in one Rust binary and an 11 MB container.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="FileFlow">
+<meta property="og:description" content="Self-hosted file sharing where every link answers to its owner. One Rust binary, SQLite, an 11 MB distroless image.">
+<meta property="og:url" content="https://ouaazizdriss.github.io/fileflow/">
+<meta property="og:image" content="https://ouaazizdriss.github.io/fileflow/img/files.webp">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#efeae0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3 8a2 2 0 0 1 2-2h7l3 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' fill='%23e4cf98' stroke='%231c1d21' stroke-width='2'/%3E%3Cpath d='M10 18h12m-4-4 4 4-4 4' fill='none' stroke='%231f4fa3' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: a document control desk. Sections are drawers with manila tabs, every rule is a numbered clause,
+   and every request leaves with a slip that gets stamped RELEASED, WITHHELD or LOCKED. */
+:root {
+  --desk: #efeae0; --sheet: #fbf8f1; --ink: #1c1d21; --sub: #5b574d; --rule: #d9d1c0; --rule-ink: #1c1d21;
+  --manila: #e4cf98; --manila-soft: #f3e9cc; --manila-ink: #6b5420;
+  --carbon: #1f4fa3; --carbon-soft: #e2e9f6;
+  --stamp: #b3261e; --ok: #2b6a3c; --hold: #8a5800;
+  --code-bg: #1d1e22; --code-fg: #e8e4da; --code-dim: #9a968c; --code-kw: #9fbaf0; --code-ok: #8fd6a2; --code-str: #e8c27a; --code-rule: #34353b;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --col: 1200px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --desk: #121210; --sheet: #1a1916; --ink: #ece7db; --sub: #a49e90; --rule: #2f2c26; --rule-ink: #ece7db;
+  --manila: #5b4a22; --manila-soft: #262014; --manila-ink: #e6cf8f;
+  --carbon: #8fb0f2; --carbon-soft: #172238;
+  --stamp: #ff7d6e; --ok: #74cf8d; --hold: #e6b455;
+  --code-bg: #0c0c0b; --code-rule: #26272b;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --desk: #121210; --sheet: #1a1916; --ink: #ece7db; --sub: #a49e90; --rule: #2f2c26; --rule-ink: #ece7db;
+  --manila: #5b4a22; --manila-soft: #262014; --manila-ink: #e6cf8f;
+  --carbon: #8fb0f2; --carbon-soft: #172238;
+  --stamp: #ff7d6e; --ok: #74cf8d; --hold: #e6b455;
+  --code-bg: #0c0c0b; --code-rule: #26272b;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+html { scroll-behavior: smooth; scroll-padding-top: 70px }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--body); font-size: 16.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden }
+img { max-width: 100% }
+a { color: var(--carbon) }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; font-optical-sizing: auto }
+h1 { font-size: clamp(40px, 6.2vw, 82px); line-height: .98; font-weight: 750; letter-spacing: -0.035em; font-variation-settings: "wdth" 88 }
+h2 { font-size: clamp(30px, 4.2vw, 52px); line-height: 1.02; font-weight: 720; letter-spacing: -0.03em; font-variation-settings: "wdth" 90 }
+h3 { font-size: 19px; line-height: 1.25; font-weight: 680; letter-spacing: -0.01em }
+p { margin: 0; max-width: 66ch }
+code, .mono { font-family: var(--mono); font-size: .86em }
+:focus-visible { outline: 2px solid var(--carbon); outline-offset: 2px }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.skip { position: absolute; left: 16px; top: -60px; background: var(--ink); color: var(--desk); padding: 8px 14px; z-index: 50; text-decoration: none }
+.skip:focus { top: 8px }
+
+/* Bands */
+.band { padding: 92px max(16px, env(safe-area-inset-right, 0px)) 92px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--rule) }
+.band.sheet { background: var(--sheet) }
+.wrap { max-width: var(--col); margin: 0 auto; display: flex; flex-direction: column; gap: 44px; min-width: 0 }
+.lede { font-size: 19px; line-height: 1.55; color: var(--sub) }
+
+/* Section head: a manila drawer tab carrying the drawer number and the path, then the title */
+.head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: 18px 56px; align-items: end; border-top: 2px solid var(--rule-ink); position: relative; padding-top: 26px }
+.head .tab-label { position: absolute; top: -2px; left: 0; transform: translateY(-100%); background: var(--manila); color: var(--manila-ink); font: 500 12px var(--mono); padding: 6px 14px 5px; border: 2px solid var(--rule-ink); border-bottom: 0; border-radius: 6px 6px 0 0; letter-spacing: .02em; white-space: nowrap }
+.head .tab-label b { font-weight: 600; color: var(--ink) }
+:root[data-theme="dark"] .head .tab-label b { color: var(--manila-ink) }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .head .tab-label b { color: var(--manila-ink) } }
+@media (max-width: 880px) { .head { grid-template-columns: minmax(0, 1fr) } }
+
+/* Top bar */
+.top { position: sticky; top: 0; z-index: 20; background: var(--desk); border-bottom: 1px solid var(--rule); padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)) }
+.top .in { max-width: var(--col); margin: 0 auto; height: 58px; display: flex; align-items: center; gap: 26px }
+.word { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 750 22px var(--display); letter-spacing: -0.03em; font-variation-settings: "wdth" 88 }
+.word svg { width: 26px; height: 26px; flex: none }
+.nav { margin-left: auto; display: flex; gap: 22px; font-size: 14.5px }
+.nav a { color: var(--sub); text-decoration: none; transition: color .18s } .nav a:hover { color: var(--ink) }
+.theme { appearance: none; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule-ink); font: 500 12px var(--mono); padding: 0 12px; min-height: 36px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .18s }
+.theme:hover { background: var(--manila-soft) }
+.theme svg { width: 15px; height: 15px }
+@media (max-width: 900px) { .nav { display: none } .theme { margin-left: auto } }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start }
+@media (max-width: 1000px) { .hero { grid-template-columns: minmax(0, 1fr); gap: 44px } }
+.hero-copy { display: flex; flex-direction: column; gap: 26px; min-width: 0 }
+.eyebrow { font: 500 12.5px var(--mono); color: var(--sub); letter-spacing: .02em }
+.eyebrow b { color: var(--carbon); font-weight: 600 }
+h1 .hl { color: var(--carbon) }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 2px solid var(--rule-ink) }
+.facts div { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--rule); font-size: 14px; color: var(--sub); min-width: 0 }
+.facts div:nth-child(odd) { border-right: 1px solid var(--rule) }
+.facts div:nth-child(even) { padding-left: 14px }
+.facts b { display: block; font: 680 15.5px var(--display); color: var(--ink) }
+.cta { display: flex; gap: 12px; flex-wrap: wrap }
+.btn { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; appearance: none; border: 1.5px solid var(--rule-ink); background: var(--sheet); color: var(--ink); font: 600 14.5px var(--body); padding: 9px 18px; cursor: pointer; text-decoration: none; transition: background .18s, color .18s, border-color .18s }
+.btn:hover { background: var(--manila-soft) }
+.btn.pri { background: var(--ink); color: var(--desk) }
+.btn.pri:hover { background: var(--carbon); border-color: var(--carbon); color: #fff }
+
+/* The release slip (hero demo) */
+.slip { background: var(--sheet); border: 1.5px solid var(--rule-ink); box-shadow: 6px 6px 0 var(--manila); min-width: 0; position: relative }
+.slip-hd { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; justify-content: space-between; padding: 12px 18px; border-bottom: 1.5px solid var(--rule-ink); font: 500 12px var(--mono); color: var(--sub) }
+.slip-hd b { font: 700 15px var(--display); color: var(--ink); letter-spacing: -0.01em }
+.slip-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr) }
+@media (max-width: 720px) { .slip-body { grid-template-columns: minmax(0, 1fr) } }
+.slip-form { padding: 16px 18px 18px; border-right: 1px dashed var(--rule); display: flex; flex-direction: column; gap: 16px; min-width: 0 }
+@media (max-width: 720px) { .slip-form { border-right: 0; border-bottom: 1px dashed var(--rule) } }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0 }
+legend { font: 600 11.5px var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .06em; padding: 0; margin-bottom: 7px }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chips input, .opts input { position: absolute; opacity: 0; pointer-events: none }
+.chips label { cursor: pointer; font: 500 12.5px var(--mono); padding: 7px 10px; min-height: 34px; border: 1px solid var(--rule); background: var(--desk); transition: background .15s, border-color .15s; display: inline-flex; align-items: center }
+.chips label:hover { border-color: var(--rule-ink) }
+.chips input:checked + label { background: var(--ink); color: var(--desk); border-color: var(--ink) }
+.chips input:focus-visible + label, .opts input:focus-visible + label { outline: 2px solid var(--carbon); outline-offset: 1px }
+.opts { display: flex; flex-direction: column; border-top: 1px solid var(--rule) }
+.opts label { cursor: pointer; font-size: 14px; line-height: 1.35; padding: 8px 4px 8px 26px; min-height: 40px; border-bottom: 1px solid var(--rule); position: relative; display: flex; align-items: center; transition: background .15s }
+.opts label::before { content: ""; position: absolute; left: 6px; top: 50%; width: 11px; height: 11px; border: 1.5px solid var(--sub); border-radius: 50%; transform: translateY(-50%) }
+.opts input:checked + label { background: var(--carbon-soft) }
+.opts input:checked + label::before { background: var(--carbon); border-color: var(--carbon); box-shadow: inset 0 0 0 2px var(--sheet) }
+.opts label:hover { background: var(--carbon-soft) }
+.opts input:disabled + label { color: var(--sub); opacity: .5; cursor: not-allowed; background: none }
+.slip-out { padding: 16px 18px 20px; min-width: 0; display: flex; flex-direction: column; gap: 10px; position: relative; min-height: 360px }
+.req { font: 500 12.5px var(--mono); color: var(--ink); padding-bottom: 8px; border-bottom: 1px solid var(--rule); word-break: break-word }
+.req .m { color: var(--carbon); font-weight: 600 }
+.trace { list-style: none; margin: 0; padding: 0; font: 400 12.5px/1.55 var(--mono); display: flex; flex-direction: column; gap: 5px }
+.trace li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; animation: typein .22s ease-out backwards }
+.trace li .k { font-weight: 600; text-transform: uppercase; font-size: 11px; padding-top: 1px }
+.trace li.ok .k { color: var(--ok) } .trace li.fail .k { color: var(--stamp) } .trace li.warn .k { color: var(--hold) } .trace li.info .k { color: var(--sub) }
+.trace li .t { word-break: break-word }
+.trace li .t i { font-style: normal; color: var(--sub) }
+@keyframes typein { from { opacity: 0; transform: translateX(-4px) } }
+.result { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--rule) }
+.result .rcode { font: 500 13px var(--mono) }
+.stampmark { font: 800 22px var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 4px 14px 3px; border: 3px solid currentColor; border-radius: 4px; transform: rotate(-4deg); font-variation-settings: "wdth" 80; animation: stampin .32s cubic-bezier(.2,1.6,.4,1) backwards; white-space: nowrap }
+.stampmark.go { color: var(--ok) } .stampmark.stop { color: var(--stamp) } .stampmark.hold { color: var(--hold) }
+@keyframes stampin { from { transform: rotate(-4deg) scale(1.6); opacity: 0 } }
+.slip-note { font-size: 13.5px; color: var(--sub) }
+
+/* Ledger (numbers) */
+.ledger { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 2px solid var(--rule-ink); border-bottom: 1px solid var(--rule) }
+.ledger > div { padding: 16px 18px 18px 0; min-width: 0 }
+.ledger > div + div { padding-left: 18px; border-left: 1px solid var(--rule) }
+.ledger .n { font: 760 clamp(36px, 4.4vw, 58px)/1 var(--display); letter-spacing: -0.04em; font-variant-numeric: tabular-nums; font-variation-settings: "wdth" 85 }
+.ledger .n small { font-size: .45em; letter-spacing: 0; margin-left: 2px }
+.ledger .l { display: block; font-weight: 600; font-size: 14.5px; margin-top: 10px }
+.ledger .h { display: block; font: 400 11.5px/1.5 var(--mono); color: var(--sub); margin-top: 6px }
+@media (max-width: 1000px) { .ledger { grid-template-columns: repeat(2, minmax(0, 1fr)) } .ledger > div, .ledger > div + div { padding: 16px 14px 18px 0; border-left: 0; border-bottom: 1px solid var(--rule) } .ledger > div:nth-child(even) { padding-left: 14px; border-left: 1px solid var(--rule) } .ledger > div:last-child { border-bottom: 0 } }
+
+/* Sharing: index cards */
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px }
+@media (max-width: 1080px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+@media (max-width: 600px) { .cards { grid-template-columns: minmax(0, 1fr) } }
+.card { background: var(--sheet); border: 1.5px solid var(--rule-ink); display: flex; flex-direction: column; min-width: 0; transition: transform .2s, box-shadow .2s }
+.card:hover { transform: translateY(-3px); box-shadow: 0 6px 0 var(--manila) }
+.card .ch { padding: 14px 16px 12px; border-bottom: 1.5px solid var(--rule-ink); display: flex; flex-direction: column; gap: 6px; background: repeating-linear-gradient(transparent 0 27px, var(--rule) 27px 28px) }
+.card .route { font: 500 11.5px var(--mono); color: var(--carbon) }
+.card .ch p { font-size: 14.5px; color: var(--sub) }
+.card ul { list-style: none; margin: 0; padding: 4px 16px 14px }
+.card li { font-size: 14px; padding: 8px 0; border-bottom: 1px dashed var(--rule); line-height: 1.45 }
+.card li:last-child { border-bottom: 0 }
+.card li b { font-weight: 600 }
+
+/* Rules: numbered clauses */
+.clauses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid var(--rule-ink) }
+.clause { padding: 22px 26px 26px 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.clause:not(:nth-child(3n+1)) { padding-left: 26px; border-left: 1px solid var(--rule) }
+.clause .no { font: 600 12px var(--mono); color: var(--stamp); letter-spacing: .04em }
+.clause p { font-size: 15px; color: var(--sub) }
+.clause p code { color: var(--ink) }
+@media (max-width: 1000px) { .clauses { grid-template-columns: repeat(2, minmax(0, 1fr)) } .clause:not(:nth-child(3n+1)) { padding-left: 0; border-left: 0 } .clause:nth-child(even) { padding-left: 22px; border-left: 1px solid var(--rule) } .clause { padding-right: 22px } }
+@media (max-width: 640px) { .clauses { grid-template-columns: minmax(0, 1fr) } .clause, .clause:nth-child(even) { padding: 20px 0 22px; border-left: 0 } }
+
+/* Desk demos (path check, lockout) */
+.desk2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px }
+@media (max-width: 1000px) { .desk2 { grid-template-columns: minmax(0, 1fr) } }
+.tool { background: var(--sheet); border: 1.5px solid var(--rule-ink); min-width: 0; display: flex; flex-direction: column }
+.tool-hd { padding: 12px 18px; border-bottom: 1.5px solid var(--rule-ink); display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap }
+.tool-hd b { font: 700 16px var(--display) }
+.tool-hd span { font: 500 11.5px var(--mono); color: var(--sub) }
+.tool-bd { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0 }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
+.field label { font: 600 11.5px var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .06em }
+.field input, .field select { font: 500 14px var(--mono); color: var(--ink); background: var(--desk); border: 1px solid var(--rule-ink); padding: 9px 10px; min-height: 42px; width: 100%; min-width: 0; border-radius: 0 }
+.presets { display: flex; flex-wrap: wrap; gap: 6px }
+.presets button { appearance: none; font: 500 11.5px var(--mono); color: var(--ink); background: var(--desk); border: 1px solid var(--rule); padding: 6px 9px; min-height: 34px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: border-color .15s }
+.presets button:hover { border-color: var(--rule-ink) }
+.steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); font: 400 12.5px/1.5 var(--mono) }
+.steps li { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.steps li .s { color: var(--sub) }
+.steps li .v { word-break: break-word }
+.steps li .v.ok { color: var(--ok) } .steps li .v.fail { color: var(--stamp) } .steps li .v.skip { color: var(--sub) }
+.verdict { display: flex; align-items: center; gap: 14px; flex-wrap: wrap }
+@media (max-width: 480px) { .steps li { grid-template-columns: minmax(0, 1fr); gap: 2px } }
+
+.meters { display: flex; flex-direction: column; gap: 12px }
+.meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline }
+.meter .lab { font-size: 14px; font-weight: 600 }
+.meter .lab span { font: 400 11.5px var(--mono); color: var(--sub); margin-left: 6px }
+.meter .cnt { font: 600 12.5px var(--mono); font-variant-numeric: tabular-nums }
+.meter .bar { grid-column: 1 / -1; height: 10px; background: var(--desk); border: 1px solid var(--rule); position: relative; overflow: hidden }
+.meter .bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--carbon); transition: width .25s ease }
+.meter.locked .bar i { background: var(--stamp) }
+.meter.locked .cnt { color: var(--stamp) }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px }
+.btn.sm { min-height: 40px; font-size: 13.5px; padding: 7px 12px }
+.log { font: 400 12px/1.5 var(--mono); background: var(--desk); border: 1px solid var(--rule); padding: 10px 12px; min-height: 98px; max-height: 140px; overflow-y: auto }
+.log div { white-space: pre-wrap; word-break: break-word }
+.log .f { color: var(--stamp) } .log .o { color: var(--ok) } .log .b { color: var(--hold) }
+
+/* Screens */
+.tabs { display: flex; flex-wrap: wrap; gap: 0 4px; border-bottom: 2px solid var(--rule-ink) }
+.tab { appearance: none; background: transparent; border: 1.5px solid transparent; border-bottom: 0; margin-bottom: 0; padding: 8px 12px 7px; min-height: 40px; font: 500 12.5px var(--mono); color: var(--sub); cursor: pointer; border-radius: 6px 6px 0 0; transition: color .15s, background .15s }
+.tab:hover { color: var(--ink) }
+.tab[aria-selected="true"] { background: var(--manila); color: var(--ink); border-color: var(--rule-ink) }
+:root[data-theme="dark"] .tab[aria-selected="true"] { color: var(--manila-ink) }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tab[aria-selected="true"] { color: var(--manila-ink) } }
+.shot { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 3fr); gap: 32px; align-items: start }
+@media (max-width: 980px) { .shot { grid-template-columns: minmax(0, 1fr) } }
+.frame { border: 1.5px solid var(--rule-ink); background: #0d0f14; aspect-ratio: 1440 / 900; overflow: hidden; box-shadow: 6px 6px 0 var(--manila) }
+.frame img { display: block; width: 100%; height: 100%; object-fit: cover; animation: fadein .35s ease }
+@keyframes fadein { from { opacity: .3 } }
+.shot-copy { display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+.shot-copy .counter { font: 500 12px var(--mono); color: var(--sub) }
+.shot-copy p { font-size: 15.5px; color: var(--sub) }
+.shot-copy ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule) }
+.shot-copy li { font-size: 14.5px; padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.caption { font-size: 13.5px; color: var(--sub) }
+
+/* Cabinet (feature catalog) */
+.cabinet { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--rule-ink) }
+.drawer { padding: 16px 20px 6px 0; min-width: 0 }
+.drawer + .drawer { padding-left: 20px; border-left: 1px solid var(--rule) }
+.drawer h3 { font-size: 16.5px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 4px }
+.drawer h3 small { font: 400 11.5px var(--mono); color: var(--sub) }
+.drawer ol { list-style: none; margin: 0; padding: 0 }
+.drawer li { padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; font-weight: 600; transition: padding .2s, color .2s }
+.drawer li span { display: block; font-weight: 400; font-size: 13.5px; color: var(--sub) }
+.drawer li:hover { padding-left: 6px; color: var(--carbon) }
+@media (max-width: 1000px) { .cabinet { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px } .drawer, .drawer + .drawer { padding: 16px 0 6px; border-left: 0 } }
+@media (max-width: 560px) { .cabinet { grid-template-columns: minmax(0, 1fr) } }
+
+/* Architecture */
+.arch { border: 1.5px solid var(--rule-ink); background: var(--sheet); overflow-x: auto }
+.arch svg { display: block; width: 100%; min-width: 860px; height: auto }
+.arch .box { fill: var(--sheet); stroke: var(--rule-ink); stroke-width: 1.4 }
+.arch .core { fill: var(--carbon-soft); stroke: var(--carbon); stroke-width: 2 }
+.arch .inner { fill: var(--sheet); stroke: var(--rule); stroke-width: 1 }
+.arch .manila { fill: var(--manila-soft); stroke: var(--rule-ink); stroke-width: 1.4 }
+.arch text { fill: var(--ink); font-family: var(--body); font-size: 13px }
+.arch .t { font-family: var(--display); font-weight: 700; font-size: 15px }
+.arch .s { fill: var(--sub); font-family: var(--mono); font-size: 10.5px }
+.arch .wire { fill: none; stroke: var(--rule-ink); stroke-width: 1.4; opacity: .35 }
+.arch .flow { fill: none; stroke: var(--carbon); stroke-width: 2; stroke-dasharray: 3 8; animation: flow 1.2s linear infinite }
+.arch .flow.anon { stroke: var(--stamp) }
+.arch .flow.slow { stroke: var(--sub); animation-duration: 2.4s }
+@keyframes flow { to { stroke-dashoffset: -22 } }
+.scrollhint { font: 400 12px var(--mono); color: var(--sub); display: none }
+@media (max-width: 900px) { .scrollhint { display: block } }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.notes > div { display: flex; flex-direction: column; gap: 8px; padding-right: 28px; min-width: 0 }
+.notes > div + div { padding-left: 28px; border-left: 1px solid var(--rule) }
+.notes p { color: var(--sub); font-size: 15px }
+@media (max-width: 860px) { .notes { grid-template-columns: minmax(0, 1fr); gap: 28px } .notes > div, .notes > div + div { padding: 0; border: 0 } }
+
+/* Pipeline: routing slip */
+.routing { border: 1.5px solid var(--rule-ink); background: var(--sheet); overflow-x: auto }
+.routing table { border-collapse: collapse; width: 100%; min-width: 760px }
+.routing caption { text-align: left; padding: 12px 16px; font: 500 12px var(--mono); color: var(--sub); border-bottom: 1.5px solid var(--rule-ink) }
+.routing th { text-align: left; font: 600 11.5px var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .05em; padding: 10px 16px; border-bottom: 1px solid var(--rule-ink) }
+.routing td { padding: 11px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; font-size: 14.5px }
+.routing td + td, .routing th + th { border-left: 1px solid var(--rule) }
+.routing td.job { font: 600 13px var(--mono); white-space: nowrap }
+.routing td.when { font: 400 12px var(--mono); color: var(--sub); white-space: nowrap }
+.routing td.sig { width: 120px; text-align: center }
+.routing tr.grp td { background: var(--manila-soft); font: 600 12px var(--mono); color: var(--manila-ink); letter-spacing: .03em }
+.initial { display: inline-block; font: 700 12px var(--display); letter-spacing: .06em; color: var(--ok); border: 2px solid currentColor; border-radius: 3px; padding: 1px 7px; transform: rotate(-3deg); text-transform: uppercase }
+.initial.wk { color: var(--hold) }
+.pipe-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 }
+.pipe-notes > div { padding-right: 26px; min-width: 0; display: flex; flex-direction: column; gap: 6px }
+.pipe-notes > div + div { padding-left: 26px; border-left: 1px solid var(--rule) }
+.pipe-notes p { font-size: 15px; color: var(--sub) }
+@media (max-width: 860px) { .pipe-notes { grid-template-columns: minmax(0, 1fr); gap: 24px } .pipe-notes > div, .pipe-notes > div + div { padding: 0; border: 0 } }
+
+/* Install */
+.install { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: 36px; align-items: start }
+@media (max-width: 1000px) { .install { grid-template-columns: minmax(0, 1fr) } }
+.code { background: var(--code-bg); color: var(--code-fg); font: 400 13px/1.7 var(--mono); border-top: 4px solid var(--manila); min-width: 0 }
+.code .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--code-rule); color: var(--code-dim); font-size: 11.5px }
+.code .copy { appearance: none; background: none; border: 1px solid var(--code-rule); color: var(--code-dim); font: 500 11px var(--mono); padding: 4px 10px; min-height: 30px; cursor: pointer; transition: color .15s, border-color .15s }
+.code .copy:hover { color: var(--code-fg); border-color: var(--code-dim) }
+.code pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; white-space: pre }
+.code .c { color: var(--code-dim) } .code .k { color: var(--code-kw) } .code .v { color: var(--code-str) } .code .g { color: var(--code-ok) }
+.request { border: 1.5px dashed var(--rule-ink); padding: 14px 16px; background: var(--manila-soft); font-size: 14.5px; display: flex; gap: 12px; align-items: flex-start }
+.request b { font-family: var(--display) }
+.env { border-top: 2px solid var(--rule-ink); overflow-x: auto }
+.env table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px }
+.env th { text-align: left; font: 600 11.5px var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .05em; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule-ink) }
+.env td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top }
+.env td:first-child { font: 600 12.5px var(--mono); white-space: nowrap }
+.env td:nth-child(2) { font: 400 12.5px var(--mono); color: var(--carbon); white-space: nowrap }
+.env td:last-child { color: var(--sub) }
+
+/* Footer */
+footer { padding: 40px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)) }
+footer .wrap { flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 14px; color: var(--sub) }
+footer b { color: var(--ink) }
+
+@media (max-width: 600px) {
+  .band { padding-top: 64px; padding-bottom: 64px }
+  .wrap { gap: 34px }
+  .facts { grid-template-columns: minmax(0, 1fr) } .facts div:nth-child(odd) { border-right: 0 } .facts div:nth-child(even) { padding-left: 0 }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important }
+  html { scroll-behavior: auto }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="in">
+    <a class="word" href="#top" aria-label="FileFlow, back to top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h7l3 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="var(--manila)" stroke="var(--ink)" stroke-width="2"/><path d="M10 18h12m-4-4 4 4-4 4" fill="none" stroke="var(--carbon)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      FileFlow
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#sharing">Sharing</a>
+      <a href="#rules">Security</a>
+      <a href="#screens">Screens</a>
+      <a href="#inside">Architecture</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#install">Install</a>
+    </nav>
+    <button class="theme" id="themeBtn" type="button" aria-label="Switch colour theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      <span id="themeLabel">Theme</span>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="band" id="top" aria-labelledby="h-hero">
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><b>FileFlow 1.0</b> &nbsp;/&nbsp; self-hosted file sharing</div>
+        <h1 id="h-hero">File sharing where every link <span class="hl">answers to its owner.</span></h1>
+        <p class="lede">FileFlow is a file manager for a team's own server. Hand files out by public link, to a colleague, through a team folder, or ask outsiders to drop files in. Each of those grants is checked against its creator's rights on every request, follows the file when it moves, and dies with it.</p>
+        <div class="facts">
+          <div><b>One Rust binary</b>axum and tokio, serving API and app</div>
+          <div><b>React + TypeScript</b>English and French interface</div>
+          <div><b>SQLite inside</b>no external database or cache</div>
+          <div><b>About 11 MB image</b>static musl, distroless, non-root</div>
+        </div>
+        <div class="cta">
+          <a class="btn pri" href="#install">Run it with Docker</a>
+          <a class="btn" href="#rules">Read the security rules</a>
+        </div>
+      </div>
+
+      <!-- Demo: the release slip -->
+      <div class="slip" aria-labelledby="slip-title">
+        <div class="slip-hd">
+          <b id="slip-title">Release slip: one public link</b>
+          <span>/Projects/Atlas redesign/creative-brief.pdf</span>
+        </div>
+        <div class="slip-body">
+          <form class="slip-form" id="slipForm" onsubmit="return false">
+            <fieldset>
+              <legend>Expires in</legend>
+              <div class="chips">
+                <input type="radio" name="exp" id="e1" value="1 hour"><label for="e1">1h</label>
+                <input type="radio" name="exp" id="e2" value="24 hours"><label for="e2">24h</label>
+                <input type="radio" name="exp" id="e3" value="7 days" checked><label for="e3">7d</label>
+                <input type="radio" name="exp" id="e4" value="30 days"><label for="e4">30d</label>
+                <input type="radio" name="exp" id="e5" value="1 year"><label for="e5">1y</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Password</legend>
+              <div class="chips">
+                <input type="radio" name="pwd" id="p0" value="0"><label for="p0">none</label>
+                <input type="radio" name="pwd" id="p1" value="1" checked><label for="p1">required</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Download limit</legend>
+              <div class="chips">
+                <input type="radio" name="cap" id="c0" value="0"><label for="c0">none</label>
+                <input type="radio" name="cap" id="c1" value="1"><label for="c1">1 (one-time)</label>
+                <input type="radio" name="cap" id="c10" value="10" checked><label for="c10">10</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Then this happens</legend>
+              <div class="opts" id="events">
+                <input type="radio" name="ev" id="v-open" value="open" checked><label for="v-open">A visitor opens the link</label>
+                <input type="radio" name="ev" id="v-guess" value="guess"><label for="v-guess">Someone guesses the password six times</label>
+                <input type="radio" name="ev" id="v-range" value="range"><label for="v-range">A player asks for a byte range</label>
+                <input type="radio" name="ev" id="v-rename" value="rename"><label for="v-rename">You rename the file first</label>
+                <input type="radio" name="ev" id="v-delete" value="delete"><label for="v-delete">You delete the file first</label>
+                <input type="radio" name="ev" id="v-revoke" value="revoke"><label for="v-revoke">Your group loses read access</label>
+                <input type="radio" name="ev" id="v-disable" value="disable"><label for="v-disable">Your account is disabled</label>
+                <input type="radio" name="ev" id="v-expire" value="expire"><label for="v-expire">The expiry date passes</label>
+                <input type="radio" name="ev" id="v-cap" value="cap"><label for="v-cap">Every allowed download is used</label>
+              </div>
+            </fieldset>
+          </form>
+          <div class="slip-out" aria-live="polite">
+            <div class="req" id="slipReq"></div>
+            <ol class="trace" id="slipTrace"></ol>
+            <div class="result">
+              <span class="rcode" id="slipCode"></span>
+              <span class="stampmark" id="slipStamp"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="slip-note">The slip replays the checks in <code>backend/src/shares.rs</code> in the order the server runs them. Each failed check returns the same 404, so a visitor never learns why a link is dead.</p>
+  </div>
+</section>
+
+<!-- LEDGER -->
+<section class="band sheet" aria-labelledby="h-ledger">
+  <div class="wrap">
+    <h2 id="h-ledger" class="sr">The project in numbers</h2>
+    <div class="ledger">
+      <div><span class="n">70</span><span class="l">API endpoints</span><span class="h">method + path pairs in the axum router, on 56 paths</span></div>
+      <div><span class="n">217</span><span class="l">automated tests</span><span class="h">103 Rust unit tests and 114 frontend tests (Vitest)</span></div>
+      <div><span class="n">39</span><span class="l">audited actions</span><span class="h">distinct event names written to the audit log</span></div>
+      <div><span class="n">10</span><span class="l">CI jobs</span><span class="h">2 correctness, 8 security: SAST, deps, secrets, fuzzing, image</span></div>
+      <div><span class="n">11<small>MB</small></span><span class="l">container image</span><span class="h">static binary + built app on distroless, per the ops docs</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- SHARING -->
+<section class="band" id="sharing" aria-labelledby="h-sharing">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 01 &nbsp;<b>/sharing</b></span>
+      <h2 id="h-sharing">Four ways to hand a file over.</h2>
+      <p class="lede">Each one is its own record with its own rules, listed in the sidebar under Sharing, and each one is bounded by what its creator may do in their own right.</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <div class="ch"><span class="route">GET /api/s/:token</span><h3>Public link</h3><p>For anyone outside the server. No account needed.</p></div>
+        <ul>
+          <li><b>Expiry</b> from 1 hour to 1 year; the server clamps any request to 60 s to 365 days.</li>
+          <li><b>Password</b> optional, stored as a bcrypt hash; the app can generate one and shows it once.</li>
+          <li><b>Download limit</b> optional; a limit of 1 makes a one-time link.</li>
+          <li>Range requests for media players, except on capped links.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="ch"><span class="route">POST /api/internal-shares</span><h3>Share with a user</h3><p>A direct grant from one account to another.</p></div>
+        <ul>
+          <li><b>Read only</b> or <b>read and write</b>, on a file or a whole folder.</li>
+          <li>Appears in the recipient's <b>Shared with me</b> view.</li>
+          <li>You can only share what you hold in your own right, so access is never re-shared down a chain.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="ch"><span class="route">POST /api/shared-folders</span><h3>Team folder</h3><p>A named workspace over one folder, with members.</p></div>
+        <ul>
+          <li>Each member gets <b>read</b> or <b>read and write</b>.</li>
+          <li>Members can never get more than the creator holds, and that is re-checked on every access.</li>
+          <li>If the creator loses access, the members lose it too.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="ch"><span class="route">POST /api/r/:token</span><h3>Upload request</h3><p>A drop box: outsiders send files into one folder.</p></div>
+        <ul>
+          <li>Optional <b>password</b> and <b>expiry</b>.</li>
+          <li>Needs write access from its creator, re-checked on every upload.</li>
+          <li>Never overwrites anything: a clash becomes <code>report (1).txt</code>.</li>
+          <li>Size capped by <code>PUBLIC_UPLOAD_MAX_MB</code>; executable types refused.</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- RULES -->
+<section class="band sheet" id="rules" aria-labelledby="h-rules">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 02 &nbsp;<b>/security</b></span>
+      <h2 id="h-rules">The rules every request is filed under.</h2>
+      <p class="lede">Nine clauses taken from the code. Most of them exist because a review asked how a shared file could escape its owner, and the answer had to be enforced in one place.</p>
+    </div>
+    <div class="clauses">
+      <div class="clause"><span class="no">§ 1 &nbsp;CANONICAL PATHS</span><h3>The path that is checked is the path that is opened</h3><p>Every client path goes through <code>normalize_virtual</code>: <code>..</code> is rejected outright, <code>.</code> and empty segments dropped. Prefix checks respect segment boundaries, so <code>/proj</code> never covers <code>/projects</code>. Symlinks are resolved and must stay inside the root.</p></div>
+      <div class="clause"><span class="no">§ 2 &nbsp;DERIVED AUTHORITY</span><h3>No grant outlives or outranks its creator</h3><p>Public links, upload requests and team folders are re-checked against the creator's own rights on each request. A disabled account or a revoked group turns its links into the same anonymous 404.</p></div>
+      <div class="clause"><span class="no">§ 3 &nbsp;LIFECYCLE</span><h3>Links follow the file</h3><p>Rename or move a file and its links, upload requests, shares, team folders, favourites and tags move with it. Delete it and they are purged, so a link can never attach to whatever is created at that path next.</p></div>
+      <div class="clause"><span class="no">§ 4 &nbsp;DOWNLOAD CAPS</span><h3>One-time means one time</h3><p>Checking the cap and counting the download is a single atomic step (<code>try_reserve_download</code>), refunded if the transfer fails. Capped links ignore <code>Range</code>, so a file can't be pulled in pieces. A test fires 50 parallel reservations at a one-time link and expects exactly one.</p></div>
+      <div class="clause"><span class="no">§ 5 &nbsp;LOGIN LOCKOUT</span><h3>Three counters, so nobody can lock you out cheaply</h3><p>5 failures per IP, 5 per username and IP, and 50 per account across all IPs, each locking for 15 minutes. Unknown usernames still pay a bcrypt hash, so timing does not reveal which accounts exist.</p></div>
+      <div class="clause"><span class="no">§ 6 &nbsp;LINK PASSWORDS</span><h3>Guessing a link password is throttled</h3><p>Failures count against the link and against the client IP, 5 each, checked before any bcrypt work. A correct password clears only the link counter, so a known link can't be used to reset an IP.</p></div>
+      <div class="clause"><span class="no">§ 7 &nbsp;REVOCABLE SESSIONS</span><h3>Every session can be ended</h3><p>Sessions are HS256 tokens in an <code>HttpOnly</code>, <code>SameSite=Strict</code> cookie. Each carries a <code>tv</code> claim that must match the account's <code>token_version</code>; changing a password, "log out everywhere" or an admin revoke bumps it. It starts at a random value, so a re-created account can't reuse old tokens.</p></div>
+      <div class="clause"><span class="no">§ 8 &nbsp;TWO FACTORS</span><h3>2FA, with step-up to change it</h3><p>TOTP enrolment by QR code, plus 10 one-time recovery codes stored as bcrypt hashes. Disabling 2FA or regenerating codes needs the password and a current code. Turning 2FA on or off ends every other session. The 2FA step has its own lockout.</p></div>
+      <div class="clause"><span class="no">§ 9 &nbsp;BROWSER</span><h3>Uploaded files never run in the app</h3><p>A strict CSP (<code>script-src 'self'</code>), <code>nosniff</code>, <code>no-referrer</code>, COOP, a deny-all Permissions-Policy, and HSTS behind TLS. HTML, SVG and XML previews are served as plain text. 21 executable extensions are refused at upload.</p></div>
+    </div>
+
+    <div class="desk2">
+      <div class="tool" aria-labelledby="pc-title">
+        <div class="tool-hd"><b id="pc-title">Clause 1, on your own path</b><span>a port of normalize_virtual + path_covers</span></div>
+        <div class="tool-bd">
+          <div class="field">
+            <label for="pcPrefix">User's group may access</label>
+            <select id="pcPrefix">
+              <option value="/Projects">/Projects</option>
+              <option value="/Clients">/Clients</option>
+              <option value="/">/ (no restriction)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pcPath">Requested path</label>
+            <input id="pcPath" type="text" value="/Projects/../Clients/Northwind/proposal.docx" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="presets" aria-label="Example paths">
+            <button type="button" data-p="/Projects/Atlas redesign/README.md">inside the prefix</button>
+            <button type="button" data-p="/Projects/../Clients/Northwind/proposal.docx">dot-dot escape</button>
+            <button type="button" data-p="/Projects-old/plan.txt">look-alike prefix</button>
+            <button type="button" data-p="//Projects/./Atlas redesign/">messy spelling</button>
+            <button type="button" data-p="/Projects/.fileflow/versions/3f1a/1730.bak">internal store</button>
+          </div>
+          <ol class="steps" id="pcSteps"></ol>
+          <div class="verdict"><span class="stampmark" id="pcStamp"></span><span class="mono" id="pcCode"></span></div>
+        </div>
+      </div>
+
+      <div class="tool" aria-labelledby="lk-title">
+        <div class="tool-hd"><b id="lk-title">Clause 5, under attack</b><span>thresholds from ratelimit.rs</span></div>
+        <div class="tool-bd">
+          <div class="meters" id="meters"></div>
+          <div class="btnrow">
+            <button class="btn sm" type="button" id="lkWrong">Wrong password, same IP</button>
+            <button class="btn sm" type="button" id="lkRotate">Wrong password, next IP</button>
+            <button class="btn sm" type="button" id="lkRight">Right password, same IP</button>
+            <button class="btn sm" type="button" id="lkReset">Reset</button>
+          </div>
+          <div class="log" id="lkLog" aria-live="polite"></div>
+          <p class="slip-note">Attacker logs in as <code>lina</code>. Blocked attempts are refused before the password is checked and are not counted.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENS -->
+<section class="band" id="screens" aria-labelledby="h-screens">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 03 &nbsp;<b>/screens</b></span>
+      <h2 id="h-screens">The app, as it runs.</h2>
+      <p class="lede">Real screens from a local build of the current code, with demo data. One sidebar holds the folder tree, favourites and the four sharing views.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Screens" id="tabs"></div>
+    <div class="shot" id="shotPanel" role="tabpanel">
+      <div class="frame"><img id="shotImg" src="img/files.webp" alt="" width="1440" height="900"></div>
+      <div class="shot-copy">
+        <span class="counter" id="shotCount"></span>
+        <h3 id="shotTitle"></h3>
+        <p id="shotText"></p>
+        <ul id="shotList"></ul>
+      </div>
+    </div>
+    <p class="caption">Captured at 1440 × 900 in the light and dark themes. For these captures the app's logo and New-button gradient were recoloured to the light theme's indigo accent; everything else is as shipped.</p>
+  </div>
+</section>
+
+<!-- CABINET -->
+<section class="band sheet" aria-labelledby="h-cab">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 04 &nbsp;<b>/features</b></span>
+      <h2 id="h-cab">What else is in the cabinet.</h2>
+      <p class="lede">The everyday file work, done on the server, with 39 kinds of action written to the audit log.</p>
+    </div>
+    <div class="cabinet">
+      <div class="drawer">
+        <h3>Files <small>8</small></h3>
+        <ol>
+          <li>Grid and list views<span>sort by name, type, size, date</span></li>
+          <li>Resumable uploads<span>5 MiB chunks; idle sessions dropped after 6 h</span></li>
+          <li>Rename, move, copy<span>shares and links follow</span></li>
+          <li>Bulk zip download<span>up to 2 GiB, 4 at a time</span></li>
+          <li>Search<span>by name, or by tag</span></li>
+          <li>Tags and collections<span>per file, or in bulk</span></li>
+          <li>Favourites<span>pinned in the sidebar</span></li>
+          <li>Storage quotas<span>per user, in GB</span></li>
+        </ol>
+      </div>
+      <div class="drawer">
+        <h3>Preview <small>10</small></h3>
+        <ol>
+          <li>Images<span>zoom and reset</span></li>
+          <li>Video and audio<span>streamed with Range</span></li>
+          <li>PDF<span>the browser's own viewer</span></li>
+          <li>Markdown<span>rendered and sanitised</span></li>
+          <li>CSV<span>as a table</span></li>
+          <li>Spreadsheets<span>xlsx, xls, xlsm, xlsb, ods</span></li>
+          <li>Word<span>docx text, read without a library</span></li>
+          <li>Text and code<span>syntax highlighting</span></li>
+          <li>HTML, SVG, XML<span>shown as source, never run</span></li>
+          <li>PowerPoint<span>download only, by design</span></li>
+        </ol>
+      </div>
+      <div class="drawer">
+        <h3>Safety net <small>5</small></h3>
+        <ol>
+          <li>Versions<span>overwriting archives the old file</span></li>
+          <li>Restore a version<span>the current one is archived first</span></li>
+          <li>Trash<span>restore, or empty; purged after 30 days</span></li>
+          <li>Audit log<span>filter by user, action, date</span></li>
+          <li>CSV export<span>append-only log, rotated at 50 MB</span></li>
+        </ol>
+      </div>
+      <div class="drawer">
+        <h3>People <small>6</small></h3>
+        <ol>
+          <li>Five roles<span>admin, manager, editor, viewer, user</span></li>
+          <li>Six permissions<span>read, write, delete, users, groups, audit</span></li>
+          <li>Groups with paths<span>confine a team to its folders</span></li>
+          <li>Sessions<span>revoke one user's, or your own everywhere</span></li>
+          <li>Last-admin guard<span>the last active admin can't be removed</span></li>
+          <li>Two languages, four themes<span>English, French; light, dark and more</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="band" id="inside" aria-labelledby="h-inside">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 05 &nbsp;<b>/architecture</b></span>
+      <h2 id="h-inside">One process, two folders, nothing else to run.</h2>
+      <p class="lede">The binary serves the built React app and the JSON API on one port. Files stay plain files on disk; everything about them lives in a single SQLite file next to an append-only audit log.</p>
+    </div>
+    <span class="scrollhint">Scroll the diagram sideways.</span>
+    <figure class="arch" style="margin:0">
+      <svg viewBox="0 0 1180 560" role="img" aria-labelledby="arch-t arch-d">
+        <title id="arch-t">FileFlow architecture</title>
+        <desc id="arch-d">Browsers and anonymous visitors reach a single fileflow process. Inside it, middleware applies security headers and authentication, then handlers for files, sharing, administration and two-factor auth. The process writes user files to ROOT_DIR and metadata to an SQLite database, an audit log and a secret file in CONFIG_DIR.</desc>
+        <!-- clients -->
+        <rect class="box" x="20" y="70" width="210" height="120"/>
+        <text class="t" x="38" y="100">Team members</text>
+        <text x="38" y="124">React 18 app in the browser</text>
+        <text class="s" x="38" y="148">session cookie: HttpOnly,</text>
+        <text class="s" x="38" y="164">SameSite=Strict, Secure</text>
+        <rect class="box" x="20" y="300" width="210" height="120"/>
+        <text class="t" x="38" y="330">Outside visitors</text>
+        <text x="38" y="354">no account</text>
+        <text class="s" x="38" y="378">GET|POST /api/s/:token</text>
+        <text class="s" x="38" y="394">GET|POST /api/r/:token</text>
+
+        <!-- core -->
+        <rect class="core" x="300" y="30" width="520" height="500"/>
+        <text class="t" x="320" y="60">fileflow  (Rust · axum 0.7 · tokio)</text>
+        <text class="s" x="320" y="80">one static binary, port 8080, serves dist/ and /api</text>
+
+        <rect class="inner" x="320" y="96" width="480" height="58"/>
+        <text x="336" y="120">Layers: trace, gzip, security headers, body limit</text>
+        <text class="s" x="336" y="140">CSP · nosniff · COOP · Permissions-Policy · HSTS when Secure</text>
+
+        <rect class="inner" x="320" y="166" width="232" height="90"/>
+        <text x="336" y="190">Public routes</text>
+        <text class="s" x="336" y="210">login · 2FA verify · health</text>
+        <text class="s" x="336" y="226">/s/:token · /r/:token</text>
+        <text class="s" x="336" y="242">re-check creator on each hit</text>
+
+        <rect class="inner" x="568" y="166" width="232" height="90"/>
+        <text x="584" y="190">require_auth</text>
+        <text class="s" x="584" y="210">verify JWT (HS256)</text>
+        <text class="s" x="584" y="226">tv == token_version</text>
+        <text class="s" x="584" y="242">user exists and is active</text>
+
+        <rect class="inner" x="320" y="268" width="152" height="118"/>
+        <text x="334" y="292">Files</text>
+        <text class="s" x="334" y="312">list · preview</text>
+        <text class="s" x="334" y="328">chunked uploads</text>
+        <text class="s" x="334" y="344">versions · trash</text>
+        <text class="s" x="334" y="360">tags · search · zip</text>
+
+        <rect class="inner" x="484" y="268" width="152" height="118"/>
+        <text x="498" y="292">Sharing</text>
+        <text class="s" x="498" y="312">public links</text>
+        <text class="s" x="498" y="328">internal shares</text>
+        <text class="s" x="498" y="344">team folders</text>
+        <text class="s" x="498" y="360">upload requests</text>
+
+        <rect class="inner" x="648" y="268" width="152" height="118"/>
+        <text x="662" y="292">Admin and 2FA</text>
+        <text class="s" x="662" y="312">users · groups</text>
+        <text class="s" x="662" y="328">audit + CSV</text>
+        <text class="s" x="662" y="344">TOTP · recovery</text>
+        <text class="s" x="662" y="360">revoke sessions</text>
+
+        <rect class="inner" x="320" y="398" width="480" height="52"/>
+        <text x="336" y="420">validate_access: canonical path, permissions, groups</text>
+        <text class="s" x="336" y="438">resolve(): stays in ROOT_DIR, follows symlinks, never .fileflow*</text>
+
+        <rect class="inner" x="320" y="462" width="232" height="52"/>
+        <text x="336" y="484">Rate limiters (memory)</text>
+        <text class="s" x="336" y="502">IP · user+IP · account · 2FA · link</text>
+        <rect class="inner" x="568" y="462" width="232" height="52"/>
+        <text x="584" y="484">Maintenance, every 30 min</text>
+        <text class="s" x="584" y="502">stale uploads · limiters · links</text>
+
+        <!-- storage -->
+        <rect class="manila" x="890" y="60" width="270" height="190"/>
+        <text class="t" x="908" y="90">ROOT_DIR  /data</text>
+        <text x="908" y="114">the files, as a plain tree</text>
+        <text class="s" x="908" y="140">.fileflow/versions/</text>
+        <text class="s" x="908" y="156">.fileflow/trash.json</text>
+        <text class="s" x="908" y="172">.fileflow/metadata.json (tags)</text>
+        <text class="s" x="908" y="196">unreachable from any request</text>
+        <text class="s" x="908" y="212">path, at any depth</text>
+
+        <rect class="manila" x="890" y="290" width="270" height="200"/>
+        <text class="t" x="908" y="320">CONFIG_DIR  /config</text>
+        <text x="908" y="344">.fileflow.db  (SQLite, WAL)</text>
+        <text class="s" x="908" y="364">users · groups · links · shares</text>
+        <text class="s" x="908" y="380">team folders · favourites · requests</text>
+        <text class="s" x="908" y="396">cached in memory, written through</text>
+        <text x="908" y="424">.fileflow_audit.json</text>
+        <text class="s" x="908" y="442">append-only, rotates at 50 MB</text>
+        <text x="908" y="468">.fileflow_secret</text>
+        <text class="s" x="908" y="484">256-bit JWT key, mode 0600</text>
+
+        <!-- wires -->
+        <path class="wire" d="M230 130 H300"/>
+        <path class="flow" d="M230 130 H300"/>
+        <path class="wire" d="M230 360 C265 360 265 210 320 210"/>
+        <path class="flow anon" d="M230 360 C265 360 265 210 320 210"/>
+        <path class="wire" d="M820 160 H890"/>
+        <path class="flow" d="M820 160 H890"/>
+        <path class="wire" d="M820 390 H890"/>
+        <path class="flow slow" d="M820 390 H890"/>
+        <text class="s" x="238" y="118">HTTP(S)</text>
+        <text class="s" x="826" y="150">files</text>
+        <text class="s" x="826" y="380">records</text>
+      </svg>
+    </figure>
+    <div class="notes">
+      <div><h3>No broker, no cache server</h3><p>Rate limiters, upload sessions and the read cache live in the process. A background task tidies them every 30 minutes and purges expired links. Shutdown on SIGTERM lets in-flight requests finish.</p></div>
+      <div><h3>SQLite as a document store</h3><p>Each record is one row holding its JSON, so a change is a single-row write instead of rewriting a whole file. Older JSON stores are imported on first start and left untouched.</p></div>
+      <div><h3>Files stay files</h3><p>Your data is a normal directory tree you can back up with anything. Versions, trash and tags sit in a hidden <code>.fileflow</code> folder that no request path can reach.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section class="band sheet" id="pipeline" aria-labelledby="h-pipe">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 06 &nbsp;<b>/pipeline</b></span>
+      <h2 id="h-pipe">Ten sign-offs before a change ships.</h2>
+      <p class="lede">Two workflows run on every push and pull request. The security one also runs every Monday at 06:00 UTC, so a newly published advisory fails the build without any code change.</p>
+    </div>
+    <div class="routing">
+      <table>
+        <caption>Routing slip &nbsp;·&nbsp; .github/workflows/ci.yml and security.yml &nbsp;·&nbsp; every action pinned to a commit SHA</caption>
+        <thead><tr><th scope="col">Job</th><th scope="col">What it checks</th><th scope="col">When</th><th scope="col">Role</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="4">ci.yml: correctness</td></tr>
+          <tr><td class="job">frontend</td><td>ESLint with security and no-unsanitized rules (XSS sinks, ReDoS), i18n key check, 114 Vitest tests, <code>tsc</code> type-check and Vite build</td><td class="when">push · PR</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">backend</td><td>Clippy with <code>-D warnings</code>, where a bare <code>unwrap()</code> is an error; 103 Rust tests</td><td class="when">push · PR</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr class="grp"><td colspan="4">security.yml: scanning</td></tr>
+          <tr><td class="job">sast</td><td>Semgrep with the OWASP Top 10, Rust, TypeScript, React and secrets rule packs</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">cargo-audit</td><td>Rust dependencies against the RustSec advisory database</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">cargo-deny</td><td>Licences, banned crates, allowed sources and advisories, per <code>deny.toml</code></td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">pnpm-audit</td><td>Production JavaScript dependencies</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">trivy-fs</td><td>Repository scan for vulnerable dependencies, secrets and Dockerfile misconfiguration, down to Medium</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">gitleaks</td><td>Secrets across the full Git history</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">trivy-image</td><td>The built container's layers; fails on any fixable High or Critical</td><td class="when">push · PR · weekly</td><td class="sig"><span class="initial">gate</span></td></tr>
+          <tr><td class="job">fuzz</td><td><code>cargo fuzz</code> on the four parsers that take attacker input: <code>parse_range</code>, <code>sanitize_name</code>, <code>content_disposition</code>, <code>resolve</code>, 60 s each</td><td class="when">weekly · manual</td><td class="sig"><span class="initial wk">weekly</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pipe-notes">
+      <div><h3>Lint rules with teeth</h3><p>Clippy treats <code>unwrap_used</code>, <code>dbg!</code> and <code>todo!</code> as errors in CI. A panic in a request path is a remotely triggerable crash, so the code handles the error or states the invariant with <code>expect()</code>.</p></div>
+      <div><h3>Fuzzing where input is hostile</h3><p>The four fuzz targets cover HTTP Range parsing, uploaded file names, download headers and path resolution: the places where a stranger's bytes meet the file system.</p></div>
+      <div><h3>Pure-Rust crypto</h3><p>JWT signing uses the pure-Rust HS256 backend, and SQLite is compiled in. No OpenSSL and no C runtime, which is what lets the binary run on a distroless static image.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section class="band" id="install" aria-labelledby="h-install">
+  <div class="wrap">
+    <div class="head">
+      <span class="tab-label">drawer 07 &nbsp;<b>/install</b></span>
+      <h2 id="h-install">Build one image, mount two folders.</h2>
+      <p class="lede">A three-stage Dockerfile builds the app with Node, the server as a fully static musl binary, and copies both onto <code>distroless/static</code> running as UID 65532. The image has no shell; its health check is the binary itself.</p>
+    </div>
+    <div class="install">
+      <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div class="request">
+          <div><b>The source is private.</b> FileFlow is not published as a public image or repository. Access to the code and the Dockerfile is available on request from the author.</div>
+        </div>
+        <div class="code">
+          <div class="bar"><span>shell</span><button class="copy" type="button" data-copy="c1">copy</button></div>
+<pre id="c1"><span class="c"># from the source tree</span>
+docker build -t fileflow:latest .
+
+<span class="c"># the first admin is created from this, once</span>
+echo "ADMIN_PASSWORD=<span class="v">choose-a-long-one</span>" &gt; .env
+docker compose up -d
+
+<span class="c"># http://localhost:8080 · health: /api/health</span>
+docker compose ps   <span class="c"># healthcheck runs: fileflow healthcheck</span></pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span>docker-compose.yml (as shipped, comments trimmed)</span><button class="copy" type="button" data-copy="c2">copy</button></div>
+<pre id="c2"><span class="k">services</span>:
+  <span class="k">fileflow</span>:
+    <span class="k">image</span>: fileflow:latest
+    <span class="k">restart</span>: unless-stopped
+    <span class="k">ports</span>:
+      - <span class="v">"${PORT:-8080}:8080"</span>
+    <span class="k">environment</span>:
+      <span class="k">ADMIN_USERNAME</span>: admin
+      <span class="k">ADMIN_PASSWORD</span>: <span class="v">${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}</span>
+      <span class="k">ROOT_DIR</span>: /data
+      <span class="k">CONFIG_DIR</span>: /config
+      <span class="k">MAX_UPLOAD_MB</span>: 50000
+      <span class="k">COOKIE_SECURE</span>: <span class="v">"false"</span>        <span class="c"># local HTTP only</span>
+      <span class="k">TRUST_PROXY_HEADERS</span>: <span class="v">"false"</span>
+    <span class="k">volumes</span>:
+      - ./data:/data
+      - ./config:/config
+    <span class="k">healthcheck</span>:
+      <span class="k">test</span>: [<span class="v">"CMD"</span>, <span class="v">"/app/fileflow"</span>, <span class="v">"healthcheck"</span>]
+      <span class="k">interval</span>: 30s</pre>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        <h3>Environment, as read in <code>backend/src/lib.rs</code></h3>
+        <div class="env">
+          <table>
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>ADMIN_PASSWORD</td><td>required</td><td>Password of the first admin. Read only when no user exists yet.</td></tr>
+              <tr><td>ADMIN_USERNAME</td><td>admin</td><td>Name of that first admin.</td></tr>
+              <tr><td>ROOT_DIR</td><td>/data</td><td>Where files are stored. Created and canonicalised at start.</td></tr>
+              <tr><td>CONFIG_DIR</td><td>ROOT_DIR</td><td>Database, audit log and JWT secret. Keep it out of the file tree.</td></tr>
+              <tr><td>MAX_UPLOAD_MB</td><td>200</td><td>Largest upload for signed-in users.</td></tr>
+              <tr><td>PUBLIC_UPLOAD_MAX_MB</td><td>100</td><td>Largest anonymous upload through a request link; never above MAX_UPLOAD_MB.</td></tr>
+              <tr><td>COOKIE_SECURE</td><td>true</td><td>Secure cookies and HSTS. Set false only for plain-HTTP local use.</td></tr>
+              <tr><td>TRUST_PROXY_HEADERS</td><td>false</td><td>Use X-Forwarded-For / X-Real-IP for client IPs. Only behind a proxy that sets them, or IP lockouts can be dodged.</td></tr>
+              <tr><td>PORT</td><td>8080</td><td>Listen port.</td></tr>
+              <tr><td>JWT_SECRET</td><td>generated</td><td>Optional. Otherwise 256 random bits are created on first run and kept in CONFIG_DIR, mode 0600.</td></tr>
+              <tr><td>RUST_LOG</td><td>fileflow=info</td><td>Log filter.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="slip-note">Behind TLS, remove <code>COOKIE_SECURE: "false"</code> so cookies get the <code>Secure</code> flag and responses carry HSTS. Back up both mounted folders; together they are the whole state.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Built by <b>Driss OUAAZIZ</b> · 2026</span>
+    <span class="mono">FileFlow 1.0 · Rust, React, SQLite</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  /* ---------- theme ---------- */
+  var themeBtn = $("themeBtn"), themeLabel = $("themeLabel");
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function paintLabel() { var c = current(); themeLabel.textContent = c === "dark" ? "Light" : "Dark"; themeBtn.setAttribute("aria-label", "Switch to " + (c === "dark" ? "light" : "dark") + " theme"); }
+  try { var saved = localStorage.getItem("ff-theme"); if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved); } catch (e) {}
+  paintLabel();
+  themeBtn.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("ff-theme", next); } catch (e) {}
+    paintLabel();
+  });
+
+  /* ---------- release slip ---------- */
+  var TOKEN = "9f2c41d07b3e";
+  var PATH = "/Projects/Atlas redesign/creative-brief.pdf";
+  var form = $("slipForm");
+  function val(name) { var el = form.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : null; }
+  function syncDisabled() {
+    var pwd = val("pwd") === "1", cap = val("cap") !== "0";
+    var g = $("v-guess"), c = $("v-cap");
+    g.disabled = !pwd; c.disabled = !cap;
+    if ((!pwd && g.checked) || (!cap && c.checked)) $("v-open").checked = true;
+  }
+  function runSlip() {
+    syncDisabled();
+    var exp = val("exp"), pwd = val("pwd") === "1", cap = parseInt(val("cap"), 10), ev = val("ev");
+    var L = [], code = "", stamp = ["", ""];
+    var path = PATH;
+    function ok(t) { L.push(["ok", t]); } function fail(t) { L.push(["fail", t]); } function info(t) { L.push(["info", t]); } function warn(t) { L.push(["warn", t]); }
+    var dead = function (why) { fail(why); code = "404 Not Found · \"Share link not found or expired\""; stamp = ["stop", "Withheld"]; };
+    var method = pwd ? "POST" : "GET";
+    var req = '<span class="m">' + method + "</span> /api/s/" + TOKEN + (pwd ? "  <i>pwd=&#8226;&#8226;&#8226;&#8226;</i>" : "") + (ev === "range" ? "  <i>Range: bytes=0-1048575</i>" : "");
+
+    if (ev === "rename") { info("earlier: rename creative-brief.pdf to brief-v4.pdf"); path = "/Projects/Atlas redesign/brief-v4.pdf"; }
+    if (ev === "delete") { info("earlier: delete creative-brief.pdf (moved to trash)"); }
+    if (ev === "revoke") { info("earlier: admin removes /Projects from your group"); }
+    if (ev === "disable") { info("earlier: admin sets your account to disabled"); }
+
+    (function () {
+      // 1. lookup
+      if (ev === "delete") { dead("token lookup: no such link, it was purged with the file"); return; }
+      ok("token lookup: link on " + esc(path) + (ev === "rename" ? " <i>(re-pointed on rename)</i>" : ""));
+      // 2. expiry
+      if (ev === "expire") { dead("expiry: passed " + esc(exp) + " after creation; link deleted now"); return; }
+      ok("expiry: " + esc(exp) + " after creation, still valid");
+      // 3. creator active
+      if (ev === "disable") { dead("creator account: disabled"); return; }
+      ok("creator account: active");
+      // 4. creator can read
+      if (ev === "revoke") { dead("creator file_read on " + esc(path) + ": no longer held"); return; }
+      ok("creator file_read on the path: still held");
+      // 5. cap
+      if (cap) {
+        if (ev === "cap") { fail("download limit: " + cap + " of " + cap + " used"); code = "404 Not Found · \"This share link has reached its download limit\""; stamp = ["stop", "Withheld"]; return; }
+        ok("download limit: 0 of " + cap + " used");
+      } else { info("download limit: none"); }
+      // 6. password
+      if (pwd) {
+        if (ev === "guess") {
+          for (var i = 1; i <= 5; i++) warn("attempt " + i + ": wrong password, 200 password page, failure " + i + "/5 on link and on IP");
+          fail("attempt 6: link:" + TOKEN.slice(0, 6) + "&#8230; and ip:203.0.113.7 locked for 15 min, refused before bcrypt");
+          code = "429 Too Many Requests";
+          stamp = ["hold", "Locked"]; return;
+        }
+        ok("throttle (link + IP): not locked");
+        ok("bcrypt verify: password matches, link counter cleared");
+      }
+      // 7. serve
+      if (ev === "range") {
+        if (cap) { warn("Range header ignored: a capped link always sends the whole file"); ok("reserve download atomically: 1 of " + cap); code = "200 OK · full file, counted"; stamp = ["go", "Released"]; }
+        else { ok("Range honoured: partial requests are not counted"); code = "206 Partial Content"; stamp = ["go", "Released"]; }
+        return;
+      }
+      if (cap) ok("reserve download atomically: 1 of " + cap + (cap === 1 ? " <i>(the next visitor gets 404)</i>" : ""));
+      code = "200 OK · " + esc(path.split("/").pop()) + " streamed";
+      stamp = ["go", "Released"];
+    })();
+
+    $("slipReq").innerHTML = req;
+    var tr = $("slipTrace"); tr.innerHTML = "";
+    L.forEach(function (l, i) {
+      var li = document.createElement("li"); li.className = l[0];
+      if (!reduce) li.style.animationDelay = (i * 60) + "ms";
+      li.innerHTML = '<span class="k">' + ({ ok: "ok", fail: "fail", warn: "warn", info: "note" })[l[0]] + '</span><span class="t">' + l[1] + "</span>";
+      tr.appendChild(li);
+    });
+    $("slipCode").textContent = code.replace(/&#8230;/g, "…");
+    var st = $("slipStamp"); st.className = "stampmark " + stamp[0]; st.textContent = stamp[1];
+    if (!reduce) { st.style.animation = "none"; void st.offsetWidth; st.style.animation = ""; st.style.animationDelay = (L.length * 60) + "ms"; }
+  }
+  form.addEventListener("change", runSlip);
+  runSlip();
+
+  /* ---------- path check (port of normalize_virtual / path_covers / internal component check) ---------- */
+  function normalizeVirtual(p) {
+    var out = [], segs = p.split("/");
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (s === "" || s === ".") continue;
+      if (s === "..") return null;
+      out.push(s);
+    }
+    return "/" + out.join("/");
+  }
+  function pathCovers(prefix, path) {
+    return prefix === "/" || path === prefix || (path.indexOf(prefix) === 0 && path.charAt(prefix.length) === "/");
+  }
+  function runPath() {
+    var raw = $("pcPath").value, prefix = $("pcPrefix").value;
+    var steps = [], verdict, codeTxt;
+    var canon = normalizeVirtual(raw);
+    steps.push(["raw request", esc(raw || "(empty)"), "skip"]);
+    if (canon === null) {
+      steps.push(["normalize_virtual", "contains a .. segment: rejected", "fail"]);
+      steps.push(["path_covers", "not reached", "skip"]);
+      steps.push(["resolve", "not reached", "skip"]);
+      verdict = ["stop", "Refused"]; codeTxt = "400 Bad Request · Invalid path";
+    } else {
+      steps.push(["normalize_virtual", esc(canon), "ok"]);
+      var cov = pathCovers(prefix, canon);
+      steps.push(["path_covers(" + esc(prefix) + ")", cov ? "inside the allowed prefix" : "outside it (segment boundaries count)", cov ? "ok" : "fail"]);
+      if (!cov) {
+        steps.push(["resolve", "not reached", "skip"]);
+        verdict = ["stop", "Refused"]; codeTxt = "403 Forbidden";
+      } else {
+        var internal = canon.split("/").some(function (s) { return s.indexOf(".fileflow") === 0; });
+        if (internal) {
+          steps.push(["resolve", "a .fileflow* component: internal store", "fail"]);
+          verdict = ["stop", "Refused"]; codeTxt = "403 Forbidden";
+        } else {
+          steps.push(["resolve", "ROOT_DIR" + esc(canon === "/" ? "" : canon) + ", inside the root", "ok"]);
+          verdict = ["go", "Allowed"]; codeTxt = "file served from the same string that was checked";
+        }
+      }
+    }
+    $("pcSteps").innerHTML = steps.map(function (s) { return '<li><span class="s">' + s[0] + '</span><span class="v ' + s[2] + '">' + s[1] + "</span></li>"; }).join("");
+    var st = $("pcStamp"); st.className = "stampmark " + verdict[0]; st.textContent = verdict[1];
+    if (!reduce) { st.style.animation = "none"; void st.offsetWidth; st.style.animation = ""; }
+    $("pcCode").textContent = codeTxt;
+  }
+  $("pcPath").addEventListener("input", runPath);
+  $("pcPrefix").addEventListener("change", runPath);
+  Array.prototype.forEach.call(document.querySelectorAll(".presets button"), function (b) {
+    b.addEventListener("click", function () { $("pcPath").value = b.getAttribute("data-p"); runPath(); });
+  });
+  runPath();
+
+  /* ---------- lockout simulator (MAX_ATTEMPTS 5, ACCOUNT_MAX_ATTEMPTS 50) ---------- */
+  var MAX = 5, ACC = 50;
+  var lk;
+  function lkReset() { lk = { ipIdx: 1, ip: {}, uip: {}, acc: 0, log: [] }; }
+  function ipName(i) { return "198.51.100." + (i + 9); }
+  function lkRender() {
+    var ip = ipName(lk.ipIdx), ipc = lk.ip[ip] || 0, uc = lk.uip[ip] || 0;
+    var rows = [
+      ["Per IP", ip, ipc, MAX],
+      ["Per username + IP", "lina @ " + ip, uc, MAX],
+      ["Per account, all IPs", "lina", lk.acc, ACC]
+    ];
+    $("meters").innerHTML = rows.map(function (r) {
+      var locked = r[2] >= r[3];
+      return '<div class="meter' + (locked ? " locked" : "") + '"><span class="lab">' + r[0] + "<span>" + r[1] + '</span></span><span class="cnt">' + (locked ? "locked 15 min" : r[2] + " / " + r[3]) + '</span><span class="bar"><i style="width:' + Math.min(100, r[2] / r[3] * 100) + '%"></i></span></div>';
+    }).join("");
+    var lg = $("lkLog");
+    lg.innerHTML = lk.log.length ? lk.log.slice(-40).map(function (l) { return '<div class="' + l[0] + '">' + l[1] + "</div>"; }).join("") : '<div>No attempts yet.</div>';
+    lg.scrollTop = lg.scrollHeight;
+  }
+  function attempt(right) {
+    var ip = ipName(lk.ipIdx);
+    if ((lk.ip[ip] || 0) >= MAX) { lk.log.push(["b", "429  login_blocked_ip       " + ip]); return lkRender(); }
+    if ((lk.uip[ip] || 0) >= MAX || lk.acc >= ACC) { lk.log.push(["b", "429  login_blocked_user     " + ip]); return lkRender(); }
+    if (right) {
+      lk.ip[ip] = 0; lk.uip[ip] = 0;
+      lk.log.push(["o", "200  login                  " + ip + "  (IP counters cleared, account count kept)"]);
+      return lkRender();
+    }
+    lk.ip[ip] = (lk.ip[ip] || 0) + 1; lk.uip[ip] = (lk.uip[ip] || 0) + 1; lk.acc++;
+    lk.log.push(["f", "401  login_failed           " + ip]);
+    lkRender();
+  }
+  $("lkWrong").addEventListener("click", function () { attempt(false); });
+  $("lkRight").addEventListener("click", function () { attempt(true); });
+  $("lkRotate").addEventListener("click", function () { lk.ipIdx++; attempt(false); });
+  $("lkReset").addEventListener("click", function () { lkReset(); lkRender(); });
+  lkReset(); lkRender();
+
+  /* ---------- screens ---------- */
+  var SHOTS = [
+    { f: "files", t: "Files", h: "Your folders, one sidebar", p: "The folder tree, favourites and the four sharing views share one sidebar. Breadcrumbs, back and forward, list or grid.", li: ["Right-click: open, download, share link, share with user, tags, version history, rename, copy, move, delete", "Drag files in; large ones upload in resumable chunks", "Status bar with counts and total size"] },
+    { f: "preview-md", t: "Markdown", h: "Preview without downloading", p: "Markdown renders as a document, with a toggle to the source. Output is sanitised before it reaches the page.", li: ["Tables, emphasis, code and lists", "Download from the same window", "Previews are recorded in the audit log"] },
+    { f: "preview-pdf-dark", t: "PDF", h: "PDF in the dark theme", p: "PDFs open in the browser's own viewer, inside the app. The same modal shows images, video and audio.", li: ["Served inline with a short private cache", "Range requests for seeking", "HTML, SVG and XML are shown as text, never executed"] },
+    { f: "preview-xlsx-dark", t: "Spreadsheet", h: "Spreadsheets as tables", p: "Excel and OpenDocument sheets are parsed in the browser and shown as a table with row numbers.", li: ["xlsx, xls, xlsm, xlsb, ods", "CSV gets the same table view", "Word documents show their text"] },
+    { f: "share", t: "Share link", h: "Creating a public link", p: "Pick an expiry, optionally a password and a download limit. A generated password is shown once and never again.", li: ["Expiry presets: 1 hour, 24 hours, 7 days, 30 days, 1 year", "Password stored only as a bcrypt hash", "Limit of 1 makes a one-time link"] },
+    { f: "links", t: "My links", h: "Every link you have out", p: "Each link shows its file, its creator, time left and downloads used against the limit. Admins see everyone's.", li: ["A key icon marks password-protected links", "Downloads shown as used / limit", "Delete a link and it stops at once"] },
+    { f: "requests", t: "Upload requests", h: "Asking outsiders for files", p: "An upload request is a link to a page where anyone can drop files into one folder, without an account.", li: ["Optional password and expiry", "Copy the link, or delete the request", "Uploads never replace existing files"] },
+    { f: "team", t: "Team folders", h: "A folder with members", p: "Team folders give a named group of people access to one folder, each as read only or read and write.", li: ["Add members by username", "Write access only up to the creator's own", "Remove a member and their access ends"] },
+    { f: "internal", t: "Shared with me", h: "What others gave you", p: "The recipient's side of a direct share: the item, who shared it, when, and whether it is read only.", li: ["Open the folder straight from the list", "The owner sees the same share under Shared by me", "Folders include everything beneath them"] },
+    { f: "trash", t: "Trash", h: "Deleted, not gone", p: "Deleted items wait in the trash with their original path, and can be restored there.", li: ["Purged automatically after 30 days", "Empty the trash by hand at any time", "Links to a deleted file are purged with it"] },
+    { f: "audit", t: "Audit log", h: "Who did what, from where", p: "Logins, failures, lockouts, previews, downloads, shares and admin changes, with user, resource and IP.", li: ["Filter by user, action and date range", "Export the selection as CSV", "Append-only file, rotated at 50 MB"] },
+    { f: "groups", t: "Groups", h: "Confining a team to its folders", p: "Groups carry permissions and an optional list of allowed paths. A path-restricted group sees only those folders.", li: ["Permissions: read, write, delete, manage users and groups, view audit", "Path checks use the canonical path", "A malformed path entry grants nothing"] }
+  ];
+  var tabs = $("tabs"), idx = 0;
+  SHOTS.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.id = "tab-" + s.f; b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", "shotPanel"); b.textContent = String(i + 1).padStart(2, "0") + " " + s.t;
+    b.addEventListener("click", function () { show(i); });
+    b.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        var n = (i + (e.key === "ArrowRight" ? 1 : -1) + SHOTS.length) % SHOTS.length;
+        show(n); tabs.children[n].focus();
+      }
+    });
+    tabs.appendChild(b);
+  });
+  function show(i) {
+    idx = i; var s = SHOTS[i];
+    Array.prototype.forEach.call(tabs.children, function (b, j) { b.setAttribute("aria-selected", j === i ? "true" : "false"); b.tabIndex = j === i ? 0 : -1; });
+    $("shotPanel").setAttribute("aria-labelledby", "tab-" + s.f);
+    var img = $("shotImg");
+    img.src = "img/" + s.f + ".webp"; img.alt = "FileFlow screen: " + s.h;
+    if (!reduce) { img.style.animation = "none"; void img.offsetWidth; img.style.animation = ""; }
+    $("shotCount").textContent = String(i + 1).padStart(2, "0") + " / " + SHOTS.length;
+    $("shotTitle").textContent = s.h; $("shotText").textContent = s.p;
+    $("shotList").innerHTML = s.li.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
+  }
+  show(0);
+  // warm the cache for the other screens
+  if ("requestIdleCallback" in window) requestIdleCallback(function () { SHOTS.forEach(function (s) { var im = new Image(); im.src = "img/" + s.f + ".webp"; }); });
+
+  /* ---------- copy buttons ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".copy"), function (b) {
+    b.addEventListener("click", function () {
+      var txt = $(b.getAttribute("data-copy")).textContent;
+      var done = function () { b.textContent = "copied"; setTimeout(function () { b.textContent = "copy"; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () { b.textContent = "select and copy"; });
+      else b.textContent = "select and copy";
+    });
+  });
+})();
+</script>
+</body>
+</html>
